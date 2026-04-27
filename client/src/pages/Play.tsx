@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ActionBar } from "../components/ActionBar";
+import { CoachPanel } from "../components/CoachPanel";
 import { Dealer } from "../components/Dealer";
 import { SeatBlock } from "../components/Seat";
 import { ApiError, Rounds, Sessions } from "../lib/api";
@@ -120,6 +121,8 @@ export default function Play() {
           ))}
         </div>
       )}
+
+      {round && <CoachPanel round={round} session={session} />}
 
       {error && <div className="text-red-300 text-sm">{error}</div>}
 
