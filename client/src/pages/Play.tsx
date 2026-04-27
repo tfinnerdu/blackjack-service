@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { ActionBar } from "../components/ActionBar";
 import { Dealer } from "../components/Dealer";
 import { SeatBlock } from "../components/Seat";
 import { ApiError, Rounds, Sessions } from "../lib/api";
@@ -121,6 +122,11 @@ export default function Play() {
       )}
 
       {error && <div className="text-red-300 text-sm">{error}</div>}
+
+      {/* Action bar (playing or insurance) */}
+      {round && (round.state === "playing" || round.state === "insurance") && (
+        <ActionBar round={round} />
+      )}
 
       {/* Pre-deal bet panel */}
       {!round || round.state === "complete" ? (
