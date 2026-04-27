@@ -463,3 +463,125 @@ def _side_bet_wagers_from_dict(d: dict) -> SideBetWagers:
 # pulling the engine namespace into the module-level imports above.
 from ..engine.rules import ShuffleMode  # noqa: E402
 
+
+# ---- restore in-flight round from session -----------------------------
+
+def _load_active_round(sess: GameSession) -> tuple[Round, int, dict[int, AISeat], Optional[float]]:
+    """Reconstruct (round, cards_dealt_at_start, ai_seats, true_count_now).
+
+    The shoe is rebuilt from the session's seed and burned forward to
+    cards_dealt_at_start + cards_consumed so the next deal returns the
+    correct card.
+    """
+    if not sess.active_round_json:
+        raise GameError("no round in flight")
+
+    payload = json.loads(sess.active_round_json)
+    rules = _rules(sess)
+    side_bets_cfg = _side_bets(sess)
+
+    started_at = int(payload["cards_dealt_at_start"])
+    consumed = int(payload["cards_consumed"])
+
+    shoe = Shoe(
+        decks=rules.decks,
+        mode=rules.shuffle_mode,
+        penetration=rules.penetration,
+        seed=sess.shoe_seed,
+    )
+    if rules.shuffle_mode != ShuffleMode.CSM:
+        for _ in range(started_at + consumed):
+            shoe.next_card()
+
+    rnd = round_from_json(json.dumps(payload), rules, side_bets_cfg, shoe)
+    ai = _ai_seats(sess)
+
+    # True count at the moment the round started (pre-deal). For mid-round
+    # AI decisions we keep the same TC since AI plays don't recompute mid-deal.
+    true_count_now: Optional[float] = None
+    if sess.counter_cards_seen and rules.shuffle_mode != ShuffleMode.CSM:
+        decks_remaining = max(0.5, (rules.decks * 52 - sess.counter_cards_seen) / 52.0)
+        true_count_now = sess.running_count / decks_remaining
+
+    return rnd, started_at, ai, true_count_now
+
+
+# ---- take_insurance ---------------------------------------------------
+
+def take_insurance(sess: GameSession, accept: bool, amount: Optional[int] = None) -> RoundView:
+    rnd, started_at_dealt, ai, true_count_now = _load_active_round(sess)
+    rules = _rules(sess)
+
+    if rnd.state != RoundState.INSURANCE:
+        raise GameError("not in insurance state")
+
+    rnd.offer_insurance(seat_num=sess.player_seat, accept=accept, amount=amount)
+    rnd.close_insurance()
+    if rnd.state == RoundState.PLAYING:
+        _auto_play_until_human_or_done(rnd, rules, ai, true_count_now)
+
+    if rnd.state == RoundState.COMPLETE:
+        _settle_into_session(sess, rnd)
+    _persist_round(sess, rnd, started_at_dealt=started_at_dealt)
+    db.session.commit()
+    return _build_view(rnd, rules, true_count_now)
+
+
+# ---- take_action ------------------------------------------------------
+
+def take_action(sess: GameSession, action: Action) -> RoundView:
+    rnd, started_at_dealt, ai, true_count_now = _load_active_round(sess)
+    rules = _rules(sess)
+
+    if rnd.state != RoundState.PLAYING:
+        raise GameError(f"can't act in state {rnd.state.value}")
+    seat = rnd.active_seat
+    if seat is None or not seat.is_human:
+        raise GameError("it's not the human's turn")
+
+    legal = rnd.legal_actions()
+    if action not in legal:
+        raise GameError(f"illegal action; legal: {legal}")
+
+    # Bookkeeping: record book vs actual for the hand BEFORE we mutate it.
+    # A "mistake" is any time the human's action differs from the book.
+    hand = rnd.active_hand
+    if hand is not None:
+        caps = _capabilities_from_legal(legal)
+        recommended = book(hand, rnd.dealer.cards[0], rules, caps, true_count=true_count_now).action
+        if action != recommended:
+            sess.book_mistakes += 1
+
+    # Doubling consumes an extra unit of bankroll (the original main_bet
+    # amount). Splitting also requires another unit. Both are pre-checked
+    # against the human's bankroll here so we don't go negative if they
+    # ignore the UI's enforcement.
+    if action == "double":
+        if hand is None:
+            raise GameError("no active hand")
+        if hand.bet > sess.bankroll:
+            raise GameError("insufficient bankroll to double")
+    if action == "split":
+        if seat.main_bet > sess.bankroll:
+            raise GameError("insufficient bankroll to split")
+
+    rnd.act(action)
+    _auto_play_until_human_or_done(rnd, rules, ai, true_count_now)
+
+    if rnd.state == RoundState.COMPLETE:
+        _settle_into_session(sess, rnd)
+    _persist_round(sess, rnd, started_at_dealt=started_at_dealt)
+    db.session.commit()
+    return _build_view(rnd, rules, true_count_now)
+
+
+# ---- view-only fetch (page reload) ------------------------------------
+
+def get_active_round_view(sess: GameSession) -> Optional[RoundView]:
+    """Return the current in-flight round view, or None if no round."""
+    if not sess.active_round_json:
+        return None
+    rnd, _, _, true_count_now = _load_active_round(sess)
+    rules = _rules(sess)
+    return _build_view(rnd, rules, true_count_now)
+
