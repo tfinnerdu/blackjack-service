@@ -71,6 +71,19 @@ class Card:
         return {"rank": self.rank, "suit": self.suit.value}
 
 
+def card_from_token(token: str) -> Card:
+    """Parse a 2-char token like 'TS' / '7H' / 'AC' into a Card. Used by
+    API routes and round-state snapshots so card lists travel as strings."""
+    if not isinstance(token, str) or len(token) != 2:
+        raise ValueError(f"bad card token: {token!r}")
+    rank, suit = token[0].upper(), token[1].upper()
+    return Card(rank, Suit(suit))
+
+
+def card_to_token(card: Card) -> str:
+    return f"{card.rank}{card.suit.value}"
+
+
 def hand_total(cards: Iterable[Card]) -> tuple[int, bool]:
     """Return (best total, is_soft).
 

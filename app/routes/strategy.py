@@ -27,7 +27,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 
-from ..engine.cards import Card, Suit
+from ..engine.cards import Card, Suit, card_from_token
 from ..engine.hand import Hand
 from ..engine.rules import DoubleRule, Rules, ShuffleMode, SurrenderRule
 from ..strategy import Capabilities, basic_strategy
@@ -41,11 +41,7 @@ def _err(msg: str, code: str, status: int = 400):
 
 
 def _parse_card(token: str) -> Card:
-    """Parse 'TS' / '7H' / 'AC' into a Card."""
-    if not isinstance(token, str) or len(token) != 2:
-        raise ValueError(f"bad card token: {token!r}")
-    rank, suit = token[0].upper(), token[1].upper()
-    return Card(rank, Suit(suit))
+    return card_from_token(token)
 
 
 # ---- rule coercion ----------------------------------------------------

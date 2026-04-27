@@ -1,7 +1,17 @@
 """Blackjack engine. Pure-Python, no Flask/SQLAlchemy imports — safe to use
 from tests, AI playstyles, and the API layer alike.
 """
-from .cards import Card, Color, Suit, RANKS, hand_total, is_blackjack, rank_value
+from .cards import (
+    Card,
+    Color,
+    Suit,
+    RANKS,
+    card_from_token,
+    card_to_token,
+    hand_total,
+    is_blackjack,
+    rank_value,
+)
 from .dealer import dealer_should_hit, play_dealer
 from .hand import Hand
 from .round import (
@@ -37,6 +47,8 @@ __all__ = [
     "Color",
     "Suit",
     "RANKS",
+    "card_from_token",
+    "card_to_token",
     "hand_total",
     "is_blackjack",
     "rank_value",
