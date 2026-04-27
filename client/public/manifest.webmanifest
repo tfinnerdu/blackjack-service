@@ -1,0 +1,11 @@
+{
+  "name": "Blackjack Trainer",
+  "short_name": "BJ Trainer",
+  "description": "Customizable blackjack practice with book-vs-played stats.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#073a23",
+  "theme_color": "#073a23",
+  "icons": []
+}

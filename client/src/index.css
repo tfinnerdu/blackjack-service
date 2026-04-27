@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Touch defaults: kill double-tap zoom on tappable controls; let the
+   browser still pinch-zoom anywhere else if the user really wants. */
+button,
+a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  /* dvh handles the iOS URL bar collapsing/expanding without cropping. */
+  min-height: 100dvh;
+  /* No bounce / overscroll on the table view. */
+  overscroll-behavior: none;
+}

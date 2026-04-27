@@ -1,0 +1,59 @@
+Blackjack Trainer --- project commands
+
+Project location:
+  C:\doane\Personal\blackjack-service   (or wherever you cloned)
+
+--------------------------------------------------------------------
+First-time setup
+--------------------------------------------------------------------
+  cd <project>
+  .\start-local.ps1 -ForceDeps
+  (creates .venv, installs Python + Node deps, then launches both)
+
+--------------------------------------------------------------------
+Day-to-day local dev
+--------------------------------------------------------------------
+  .\start-local.ps1
+  -> Flask on :5000  (API + serves built React after `npm run build`)
+  -> Vite  on :5173  (use this URL for live dev; proxies /api to Flask)
+
+  Backend only:
+  .\start-local.ps1 -BackendOnly
+
+--------------------------------------------------------------------
+Manual venv work
+--------------------------------------------------------------------
+  .\.venv\Scripts\Activate.ps1
+  pip install -r requirements.txt
+  python app.py
+
+--------------------------------------------------------------------
+Frontend
+--------------------------------------------------------------------
+  cd client
+  npm install
+  npm run dev          # vite dev server on :5173
+  npm run build        # outputs to ../app/static/ (served by Flask)
+  npm run typecheck    # tsc --noEmit
+
+--------------------------------------------------------------------
+Health check
+--------------------------------------------------------------------
+  curl http://localhost:5000/health
+  curl http://localhost:5000/api/v1/version
+
+--------------------------------------------------------------------
+Render deploy
+--------------------------------------------------------------------
+  Push to the main branch. render.yaml drives the build:
+    pip install -r requirements.txt
+    cd client && npm ci && npm run build
+    gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT app:app
+
+  Health check path: /health
+
+--------------------------------------------------------------------
+Database
+--------------------------------------------------------------------
+  Local: SQLite at ./blackjack.db (auto-created).
+  Prod:  Postgres via DATABASE_URL (Render sets it from render.yaml).
