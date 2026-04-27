@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ActionBar } from "../components/ActionBar";
 import { CoachPanel } from "../components/CoachPanel";
 import { Dealer } from "../components/Dealer";
+import { RoundSummary } from "../components/RoundSummary";
 import { SeatBlock } from "../components/Seat";
 import { ApiError, Rounds, Sessions } from "../lib/api";
 import { useApp } from "../lib/store";
@@ -131,8 +132,13 @@ export default function Play() {
         <ActionBar round={round} />
       )}
 
-      {/* Pre-deal bet panel */}
-      {!round || round.state === "complete" ? (
+      {/* Completion summary */}
+      {round && round.state === "complete" && (
+        <RoundSummary round={round} session={session} onNext={() => setRound(null)} />
+      )}
+
+      {/* Pre-deal bet panel — only when no round AND no completion modal */}
+      {!round ? (
         <div className="mt-auto rounded-xl bg-felt p-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase tracking-wide text-white/60">Your bet</span>
