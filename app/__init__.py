@@ -60,9 +60,11 @@ def _configure_logging(app: Flask) -> None:
 
 def _register_routes(app: Flask) -> None:
     from .routes.health import bp as health_bp
+    from .routes.strategy import bp as strategy_bp
     from .routes.templates import bp as templates_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(strategy_bp)
     app.register_blueprint(templates_bp)
 
     @app.route("/api/v1/version")
