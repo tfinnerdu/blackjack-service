@@ -95,9 +95,9 @@ export default function Play() {
           <div className="text-xs text-white/50">Bankroll</div>
           <div className="font-mono text-xl">${session.bankroll}</div>
         </div>
-        <div className="text-right text-xs text-white/40">
-          {session.template_name ?? "Custom"}
-        </div>
+        <Link to="/stats" className="text-right text-xs text-white/60 underline">
+          Stats
+        </Link>
       </div>
 
       {/* Dealer */}
