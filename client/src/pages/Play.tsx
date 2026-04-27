@@ -137,8 +137,24 @@ export default function Play() {
         <RoundSummary round={round} session={session} onNext={() => setRound(null)} />
       )}
 
-      {/* Pre-deal bet panel — only when no round AND no completion modal */}
-      {!round ? (
+      {/* Bust-out: bankroll below the table minimum, no round in flight */}
+      {!round && session.bankroll < session.rules.min_bet ? (
+        <div className="mt-auto rounded-xl bg-felt p-4 text-center space-y-2">
+          <div className="text-lg font-semibold">You're tapped out.</div>
+          <div className="text-sm text-white/70">
+            Bankroll ${session.bankroll} is below the ${session.rules.min_bet} minimum.
+          </div>
+          <Link
+            to="/stats"
+            className="block w-full min-h-touch flex items-center justify-center rounded-xl border border-white/20"
+          >
+            View stats / start over
+          </Link>
+        </div>
+      ) : null}
+
+      {/* Pre-deal bet panel — only when no round AND bankroll is healthy */}
+      {!round && session.bankroll >= session.rules.min_bet ? (
         <div className="mt-auto rounded-xl bg-felt p-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase tracking-wide text-white/60">Your bet</span>

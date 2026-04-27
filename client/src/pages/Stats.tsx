@@ -89,16 +89,31 @@ export default function Stats() {
         <div className="grid grid-cols-2 gap-3">
           <Stat label="Hands played" value={String(session.stats.hands_played)} />
           <Stat
+            label="Win rate"
+            value={
+              session.stats.hands_played
+                ? `${Math.round((session.stats.wins / session.stats.hands_played) * 100)}%`
+                : "—"
+            }
+            sub={`${session.stats.wins}W / ${session.stats.losses}L / ${session.stats.pushes}P`}
+          />
+          <Stat
             label="Book mistakes"
             value={String(session.stats.book_mistakes)}
             sub={
               session.stats.hands_played
                 ? `${Math.round(
                     (session.stats.book_mistakes / session.stats.hands_played) * 100,
-                  )}%`
+                  )}% of hands`
                 : "—"
             }
           />
+          <Stat
+            label="Player blackjacks"
+            value={String(session.stats.player_blackjacks)}
+          />
+          <Stat label="Busts" value={String(session.stats.busts)} />
+          <Stat label="Surrenders" value={String(session.stats.surrenders)} />
           <Stat label="Cards seen" value={String(session.counter.cards_seen)} />
           <Stat
             label="Running count"

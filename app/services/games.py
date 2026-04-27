@@ -336,6 +336,24 @@ def _settle_into_session(sess: GameSession, rnd: Round) -> None:
         last_results = last_results[-200:]
     sess.last_results_json = json.dumps(last_results)
     sess.hands_played += len(player_seat_outcomes)
+    # Result-type counters — split hands count separately so the totals
+    # add up to hands_played.
+    for o in player_seat_outcomes:
+        if o.result == "win":
+            sess.wins += 1
+        elif o.result == "blackjack":
+            sess.wins += 1
+            sess.player_blackjacks += 1
+        elif o.result == "loss":
+            sess.losses += 1
+        elif o.result == "bust":
+            sess.losses += 1
+            sess.busts += 1
+        elif o.result == "push":
+            sess.pushes += 1
+        elif o.result == "surrender":
+            sess.losses += 1
+            sess.surrenders += 1
 
     # AI bankrolls: settle each AI seat from its outcomes + side bets.
     ai = _ai_seats(sess)

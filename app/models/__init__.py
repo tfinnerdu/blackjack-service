@@ -131,6 +131,13 @@ class GameSession(db.Model):
     book_profit = db.Column(db.Integer, nullable=False, default=0)
     actual_profit = db.Column(db.Integer, nullable=False, default=0)
     book_mistakes = db.Column(db.Integer, nullable=False, default=0)
+    # Per-result counters (player perspective, all hands across splits).
+    wins = db.Column(db.Integer, nullable=False, default=0)
+    losses = db.Column(db.Integer, nullable=False, default=0)
+    pushes = db.Column(db.Integer, nullable=False, default=0)
+    player_blackjacks = db.Column(db.Integer, nullable=False, default=0)
+    busts = db.Column(db.Integer, nullable=False, default=0)
+    surrenders = db.Column(db.Integer, nullable=False, default=0)
 
     created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at = db.Column(
@@ -170,6 +177,12 @@ class GameSession(db.Model):
                 "actual_profit": self.actual_profit,
                 "book_profit": self.book_profit,
                 "book_mistakes": self.book_mistakes,
+                "wins": self.wins,
+                "losses": self.losses,
+                "pushes": self.pushes,
+                "player_blackjacks": self.player_blackjacks,
+                "busts": self.busts,
+                "surrenders": self.surrenders,
             },
             "active_round": (
                 json.loads(self.active_round_json) if self.active_round_json else None

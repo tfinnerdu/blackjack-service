@@ -146,6 +146,12 @@ export interface SessionView {
     actual_profit: number;
     book_profit: number;
     book_mistakes: number;
+    wins: number;
+    losses: number;
+    pushes: number;
+    player_blackjacks: number;
+    busts: number;
+    surrenders: number;
   };
   active_round: unknown | null;
   created_at: string;
