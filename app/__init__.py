@@ -33,10 +33,11 @@ def create_app(config: Config | None = None) -> Flask:
     db.init_app(app)
 
     with app.app_context():
-        # Models register on import; create tables for SQLite local dev.
-        from . import models  # noqa: F401
-        if app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite"):
-            db.create_all()
+        # Models register on import. create_all is idempotent and good enough
+        # for v0 — alembic migrations land when persistence gets real (phase 6).
+        from . import models
+        db.create_all()
+        models.seed_builtin_presets()
 
     _register_routes(app)
     _register_spa_fallback(app)
@@ -59,8 +60,10 @@ def _configure_logging(app: Flask) -> None:
 
 def _register_routes(app: Flask) -> None:
     from .routes.health import bp as health_bp
+    from .routes.templates import bp as templates_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(templates_bp)
 
     @app.route("/api/v1/version")
     def version():

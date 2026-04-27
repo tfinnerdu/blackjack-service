@@ -1,1 +1,69 @@
-"""Blackjack engine. Phase 2: shoe, hand, table, dealer, side bets."""
+"""Blackjack engine. Pure-Python, no Flask/SQLAlchemy imports — safe to use
+from tests, AI playstyles, and the API layer alike.
+"""
+from .cards import Card, Color, Suit, RANKS, hand_total, is_blackjack, rank_value
+from .dealer import dealer_should_hit, play_dealer
+from .hand import Hand
+from .round import (
+    Action,
+    HandOutcome,
+    Round,
+    RoundResult,
+    RoundState,
+    Seat,
+    SideBetWagers,
+)
+from .rules import (
+    BusterBlackjack,
+    BustIt,
+    DoubleRule,
+    LuckyLadies,
+    MatchTheDealer,
+    OverUnder13,
+    Payout,
+    PerfectPairs,
+    RoyalMatch,
+    Rules,
+    ShuffleMode,
+    SideBets,
+    SurrenderRule,
+    TwentyOnePlusThree,
+    payout_amount,
+)
+from .shoe import Shoe
+
+__all__ = [
+    "Card",
+    "Color",
+    "Suit",
+    "RANKS",
+    "hand_total",
+    "is_blackjack",
+    "rank_value",
+    "dealer_should_hit",
+    "play_dealer",
+    "Hand",
+    "Action",
+    "HandOutcome",
+    "Round",
+    "RoundResult",
+    "RoundState",
+    "Seat",
+    "SideBetWagers",
+    "BusterBlackjack",
+    "BustIt",
+    "DoubleRule",
+    "LuckyLadies",
+    "MatchTheDealer",
+    "OverUnder13",
+    "Payout",
+    "PerfectPairs",
+    "RoyalMatch",
+    "Rules",
+    "ShuffleMode",
+    "SideBets",
+    "SurrenderRule",
+    "TwentyOnePlusThree",
+    "payout_amount",
+    "Shoe",
+]
