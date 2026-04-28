@@ -8910,6 +8910,7 @@
     <Compile Include=".venv\Lib\site-packages\wsproto\__init__.py" />
     <Compile Include=".venv\Lib\site-packages\_distutils_hack\override.py" />
     <Compile Include=".venv\Lib\site-packages\_distutils_hack\__init__.py" />
+    <Compile Include="app.py" />
     <Compile Include="app\ai\bet_patterns.py" />
     <Compile Include="app\ai\playstyles.py" />
     <Compile Include="app\ai\seat.py" />
