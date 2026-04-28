@@ -84,12 +84,31 @@ def test_rejects_stud_variant():
         monte_carlo_equity(stud, H("AS", "AH"), [], opponents=1, iterations=100)
 
 
-def test_rejects_wild_variant():
-    """The 53-card joker variant has wild rules → rejected for v1."""
+def test_runs_for_wild_variant():
+    """The 53-card joker variant runs through; result tuple sums correctly."""
     joker_variant = next(v for v in all_variants() if "53-card" in v.name)
-    with pytest.raises(EquityError):
-        monte_carlo_equity(joker_variant, H("AS", "AH"), [],
-                           opponents=1, iterations=100)
+    result = monte_carlo_equity(
+        joker_variant, H("AS", "AH"), [],
+        opponents=1, iterations=100, seed=7,
+    )
+    assert result["wins"] + result["ties"] + result["losses"] == 100
+    assert 0 <= result["win_pct"] <= 100
+
+
+def test_wild_variant_default_iterations_drops_to_500():
+    """When iterations isn't passed, wild variants use a smaller default."""
+    joker_variant = next(v for v in all_variants() if "53-card" in v.name)
+    result = monte_carlo_equity(
+        joker_variant, H("AS", "AH"), [], opponents=1, seed=7,
+    )
+    assert result["iterations"] == 500
+
+
+def test_non_wild_variant_default_iterations_is_2000():
+    result = monte_carlo_equity(
+        _holdem(), H("AS", "AH"), [], opponents=1, seed=7,
+    )
+    assert result["iterations"] == 2000
 
 
 def test_rejects_wrong_hole_count_for_omaha():
