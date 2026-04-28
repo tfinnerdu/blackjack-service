@@ -256,8 +256,16 @@ class PokerSession(db.Model):
 
 
 def _ensure_columns() -> None:
-    """Idempotent boot migrations. Add columns that older deployments are
-    missing. We're not running alembic yet, so this stays inline.
+    """Idempotent boot migrations.
+
+    Why not alembic? For this project (single user, non-precious data,
+    infrequent schema changes) the operational overhead of alembic
+    (migration timing on Render, rollback story, separate
+    flask-migrate dependency) outweighs the benefit. Adding new
+    columns here is a one-liner. Switch to alembic when:
+      - Schema changes pick up cadence (multiple per week)
+      - Production data needs guaranteed-reversible migrations
+      - We add a second persistent service that shares state
 
     Each block: check if a known table exists, check if the new column
     exists, ALTER if missing. Safe to call repeatedly. Designed for
