@@ -139,6 +139,46 @@ If a project genuinely needs another to be running (e.g., a Conductor worker
 needs Conductor up), document it in `docs/bashCommands.txt` under a
 "Prerequisites" section.
 
+### Port assignments
+
+Every project that binds a port must use a unique one. Doane's port registry
+lives in hub-service at `data/ports.json` — check it before assigning a new
+port, update it after.
+
+**Process for new projects:**
+1. Read `data/ports.json` (or the equivalent canonical list — ask if unsure
+   where it lives).
+2. Pick the next available port in the appropriate range (see ranges below).
+3. Update `data/ports.json` with the new assignment, including project name
+   and brief description.
+4. Use that port consistently across:
+   - `start-local.ps1` (`$DefaultPort`)
+   - `.env.example` (`PORT=...`)
+   - `projects.json` entry in hub (`local_port`)
+   - `vite.config.js` (frontend dev port if applicable)
+   - K8s manifests (service port, if deployed)
+   - Documentation (`docs/bashCommands.txt`)
+
+**Port ranges (current convention):**
+- 5400-5499: Production-track Flask services (OCR, etc.)
+- 5500-5599: Active development Flask services (dep-graph, hub, etc.)
+- 5600-5699: Hub/orchestration services
+- 5700-5799: R&D / experimental
+- 5800-5899: Side projects (esports, fun/personal)
+- 5900-5999: Doane Labor Market and related
+- 6000+: Reserved for new initiatives
+- 8080-8099: Static sites and test fixtures
+
+Adjust ranges if they don't match current ports.json — the registry is the
+source of truth.
+
+**Never reuse a port across projects, even if one is "obviously" not running.**
+The hub's status checking, port pre-flight in start-local.ps1, and
+firewall rules all assume one project per port. Reuse causes false-positive
+status indicators, port-collision launch failures, and stale firewall rules.
+
+**Always check ports.json before suggesting a port number for a new project.**
+
 ---
 
 ## 4. Launcher standard (start-local.ps1)
@@ -163,6 +203,62 @@ target.
   enumeration.
 - Always plain ASCII in `.ps1` (no Unicode box-drawing, em dashes; use `---`
   for dividers).
+
+### Computer-name accessibility (LAN reachability beyond localhost)
+
+Every project must be reachable via the dev machine's hostname, not just
+`localhost` or an IP. This matters for cross-device testing (phone hitting
+the chatbot widget, colleague's browser, embed snippets in Drupal, etc.) and
+the IP changes when the machine moves between networks while the hostname
+doesn't.
+
+**PS1 launcher banner** — surface all three forms:
+
+\`\`\`powershell
+$lanIps = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+          Where-Object {
+              $_.IPAddress      -notmatch '^(127\.|169\.254\.)'        -and
+              $_.PrefixOrigin   -ne       'WellKnown'                  -and
+              $_.InterfaceAlias -notmatch 'Loopback|Virtual|WSL|vEthernet'
+          } |
+          Select-Object -ExpandProperty IPAddress -Unique
+
+Ok "  Local:    http://localhost:$AppPort"
+Ok "  By name:  http://$env:COMPUTERNAME`:$AppPort"
+foreach ($ip in $lanIps) {
+    Write-Host ("  Network:  http://{0}:{1}" -f $ip, $AppPort)
+}
+\`\`\`
+
+The backtick before `:$AppPort` is the PowerShell escape so `:` isn't parsed
+as part of the variable name.
+
+**Vite projects (vite.config.js)** — add `allowedHosts` to the server block:
+
+\`\`\`javascript
+server: {
+  host: '0.0.0.0',
+  port: <project port>,
+  allowedHosts: [
+    'localhost',
+    '127.0.0.1',
+    // Add dev machine hostnames here. $env:COMPUTERNAME on Windows.
+    // Domain-joined: include the FQDN (e.g. 'machine-name.doane.local')
+  ],
+}
+\`\`\`
+
+`allowedHosts: true` disables the check entirely. Acceptable for local dev,
+never for anything shared. Default to the explicit array.
+
+**Flask apps** — bind to `0.0.0.0`, no host-check middleware to configure.
+Already handled by the launcher setting `HOST=0.0.0.0`.
+
+**n8n containers (and any container calling out to the host)** — computer
+name does NOT resolve from inside Docker. Use:
+- `localhost:<port>` when the container calls itself
+- `host.docker.internal:<port>` when the container calls a service on the host
+- Computer name only works from outside the container (browser, hub, etc.)
 
 ### Hub-service Popen requirements
 
