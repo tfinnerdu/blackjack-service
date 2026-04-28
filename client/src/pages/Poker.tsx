@@ -98,7 +98,9 @@ export default function PokerPage() {
           <Link to="/" className="text-white/60 text-sm">
             ←
           </Link>
-          <div className="text-right text-xs text-white/40">poker companion</div>
+          <Link to="/poker/sim/setup" className="text-xs text-white/60 underline">
+            Try the simulator →
+          </Link>
         </div>
 
         <div>

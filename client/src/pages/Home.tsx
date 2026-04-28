@@ -73,7 +73,7 @@ export default function Home() {
 
           <ModeCard
             title="Poker"
-            blurb="Companion: pick a variant, enter your cards, see your best high + low + the hi/lo split rule explained."
+            blurb="Companion + simulator. Companion: enter cards, see best high/low + hi/lo split. Simulator: Hold'em vs personality bots."
             primary={
               <Link
                 to="/poker"
@@ -83,9 +83,12 @@ export default function Home() {
               </Link>
             }
             secondary={
-              <div className="text-xs text-white/40 text-center">
-                16 variants live including the home-game 53-card joker rule. Simulator + AI come next.
-              </div>
+              <Link
+                to="/poker/sim/setup"
+                className="block w-full min-h-touch flex items-center justify-center rounded-xl border border-white/20 text-white"
+              >
+                Sit at the simulator
+              </Link>
             }
           />
         </div>
