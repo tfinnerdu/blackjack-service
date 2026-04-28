@@ -129,6 +129,32 @@ export interface PlayerView {
   folded: boolean;
   all_in: boolean;
   is_active: boolean;
+  hands_played: number;
+  hands_won: number;
+  profit_total: number;
+}
+
+export interface PersonalityAggregate {
+  personality: string;
+  hands_played: number;
+  hands_won: number;
+  profit_total: number;
+  seat_count: number;
+}
+
+export interface PokerSessionStats {
+  hands_played: number;
+  starting_stack: number;
+  human: {
+    name: string;
+    stack: number;
+    hands_played: number;
+    hands_won: number;
+    profit_total: number;
+    win_rate_pct: number;
+  } | null;
+  personalities: PersonalityAggregate[];
+  seats: SeatConfigJSON[];
 }
 
 export interface HandResultView {
@@ -160,6 +186,7 @@ export interface RoundView {
   players: PlayerView[];
   result: HandResultView | null;
   dealer_seat: number;
+  personality_stats: PersonalityAggregate[];
 }
 
 export const Poker = {
@@ -208,4 +235,5 @@ export const Poker = {
       "/api/v1/poker/sessions/me/hands/active/action",
       { action, amount },
     ),
+  sessionStats: () => http<PokerSessionStats>("GET", "/api/v1/poker/sessions/me/stats"),
 };

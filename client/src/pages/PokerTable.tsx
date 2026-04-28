@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { CardFace } from "../components/Card";
 import { ApiError } from "../lib/api";
-import { Poker, PokerSessionView, RoundView } from "../lib/poker";
+import { PersonalityAggregate, Poker, PokerSessionView, RoundView } from "../lib/poker";
 
 export default function PokerTable() {
   const navigate = useNavigate();
@@ -162,6 +162,11 @@ export default function PokerTable() {
       {/* Hand summary on completion */}
       {round?.state === "complete" && round.result && (
         <ResultPanel round={round} humanSeat={human?.seat_num ?? 0} />
+      )}
+
+      {/* Personality scoreboard between hands */}
+      {round && showStartCTA && round.personality_stats?.length > 0 && (
+        <PersonalityScoreboard stats={round.personality_stats} />
       )}
 
       {/* Action bar (human's turn) */}
@@ -332,6 +337,51 @@ function ResultPanel({
     </div>
   );
 }
+
+function PersonalityScoreboard({ stats }: { stats: PersonalityAggregate[] }) {
+  // Skip personalities that haven't played a hand yet (showed up after a
+  // session reset or fresh start).
+  const rows = stats.filter((p) => p.hands_played > 0);
+  if (rows.length === 0) return null;
+  return (
+    <div className="rounded-xl bg-felt-dark/60 ring-1 ring-white/10 p-3 space-y-2">
+      <div className="text-xs uppercase tracking-wide text-white/60">
+        How everyone's doing
+      </div>
+      <div className="space-y-1">
+        {rows.map((p) => {
+          const winPct = p.hands_played
+            ? Math.round((p.hands_won / p.hands_played) * 100)
+            : 0;
+          const profitColor =
+            p.profit_total > 0 ? "text-emerald-300"
+            : p.profit_total < 0 ? "text-red-300"
+            : "text-white/60";
+          return (
+            <div
+              key={p.personality}
+              className="flex items-center justify-between text-sm"
+            >
+              <span className="capitalize">
+                {p.personality.replace(/_/g, " ")}
+                {p.seat_count > 1 && (
+                  <span className="text-white/40 text-xs"> ×{p.seat_count}</span>
+                )}
+              </span>
+              <span className="font-mono text-xs text-white/60">
+                {winPct}% · {p.hands_won}/{p.hands_played}
+              </span>
+              <span className={`font-mono ${profitColor}`}>
+                {p.profit_total >= 0 ? "+" : ""}${p.profit_total}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
 // ---- helpers --------------------------------------------------------
 

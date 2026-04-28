@@ -64,7 +64,11 @@ def get_current_session(req: Optional[Request] = None) -> Optional[PokerSession]
 @dataclass
 class SeatConfig:
     """One row of seats_json. Persisted as-is; each round we instantiate
-    a fresh Player + (for non-humans) AIBot from this row."""
+    a fresh Player + (for non-humans) AIBot from this row.
+
+    Per-seat counters (hands_played / hands_won / profit_total) accumulate
+    across hands so the simulator can show 'how am I doing vs each
+    personality' without recomputing from history."""
     seat_num: int
     name: str
     is_human: bool
@@ -72,6 +76,9 @@ class SeatConfig:
     personality: str = "book"
     seed: Optional[int] = None
     last_results: list[int] = field(default_factory=list)
+    hands_played: int = 0
+    hands_won: int = 0
+    profit_total: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -82,6 +89,9 @@ class SeatConfig:
             "personality": self.personality,
             "seed": self.seed,
             "last_results": list(self.last_results),
+            "hands_played": self.hands_played,
+            "hands_won": self.hands_won,
+            "profit_total": self.profit_total,
         }
 
     @classmethod
@@ -94,6 +104,9 @@ class SeatConfig:
             personality=d.get("personality", "book"),
             seed=d.get("seed"),
             last_results=list(d.get("last_results", [])),
+            hands_played=int(d.get("hands_played", 0)),
+            hands_won=int(d.get("hands_won", 0)),
+            profit_total=int(d.get("profit_total", 0)),
         )
 
 
@@ -435,6 +448,7 @@ def _settle_hand(
     seats: list[SeatConfig], bots: dict[int, AIBot],
 ) -> None:
     """Fold settled stacks back into seats_json + clear active_hand_json."""
+    won_seats = set(rnd.result.winner_seats) if rnd.result else set()
     for seat in seats:
         # Find the corresponding Player in the just-completed round; if it
         # didn't have enough to play, leave the seat untouched.
@@ -442,16 +456,26 @@ def _settle_hand(
         if live is None:
             continue
         seat.stack = live.stack
-        # Update bot history.
+        outcome = next(
+            (o for o in (rnd.result.outcomes if rnd.result else [])
+             if o.seat_num == seat.seat_num),
+            None,
+        )
+        if outcome is None:
+            continue
+        # Per-seat counters accumulate across hands. 'hands_played' counts
+        # hands the seat actually contributed to (i.e. wasn't folded
+        # before posting a blind); we approximate that by 'showed up in
+        # outcomes', which is true for every seat with a non-zero
+        # committed_total.
+        seat.hands_played += 1
+        if seat.seat_num in won_seats:
+            seat.hands_won += 1
+        seat.profit_total += outcome.profit
         bot = bots.get(seat.seat_num)
         if bot:
-            outcome = next(
-                (o for o in (rnd.result.outcomes if rnd.result else []) if o.seat_num == seat.seat_num),
-                None,
-            )
-            if outcome:
-                bot.record_result(outcome.profit)
-                seat.last_results = list(bot.last_results)
+            bot.record_result(outcome.profit)
+            seat.last_results = list(bot.last_results)
 
     _save_seats(sess, seats)
     sess.active_hand_json = None
@@ -461,6 +485,28 @@ def _settle_hand(
     cur = sess.dealer_seat
     idx = seat_nums.index(cur) if cur in seat_nums else 0
     sess.dealer_seat = seat_nums[(idx + 1) % len(seat_nums)]
+
+
+def _personality_aggregates(seats: list[SeatConfig]) -> list[dict]:
+    """Roll up per-seat counters into per-personality W/L/profit. Multiple
+    bots with the same personality merge; the human seat is skipped."""
+    rolls: dict[str, dict] = {}
+    for s in seats:
+        if s.is_human:
+            continue
+        b = rolls.setdefault(s.personality, {
+            "personality": s.personality,
+            "hands_played": 0,
+            "hands_won": 0,
+            "profit_total": 0,
+            "seat_count": 0,
+        })
+        b["hands_played"] += s.hands_played
+        b["hands_won"] += s.hands_won
+        b["profit_total"] += s.profit_total
+        b["seat_count"] += 1
+    # Sort by profit descending so the bots beating you bubble to the top.
+    return sorted(rolls.values(), key=lambda r: -r["profit_total"])
 
 
 def _round_view(rnd: HoldemRound, sess: PokerSession) -> dict:
@@ -480,6 +526,9 @@ def _round_view(rnd: HoldemRound, sess: PokerSession) -> dict:
             "folded": p.folded,
             "all_in": p.all_in,
             "is_active": rnd.active_seat is not None and rnd.active_seat.seat_num == p.seat_num,
+            "hands_played": cfg_seat.hands_played if cfg_seat else 0,
+            "hands_won": cfg_seat.hands_won if cfg_seat else 0,
+            "profit_total": cfg_seat.profit_total if cfg_seat else 0,
         })
     human = next((p for p in rnd.players if p.is_human), None)
     human_hole: list[str] = []
@@ -522,6 +571,35 @@ def _round_view(rnd: HoldemRound, sess: PokerSession) -> dict:
         "players": players_view,
         "result": result_view,
         "dealer_seat": sess.dealer_seat,
+        "personality_stats": _personality_aggregates(seats),
+    }
+
+
+def session_stats(sess: PokerSession) -> dict:
+    """Standalone session summary (no round needed). Reachable via
+    GET /api/v1/poker/sessions/me/stats so the simulator can show a
+    'how am I doing' dashboard between hands."""
+    seats = _seats(sess)
+    human = next((s for s in seats if s.is_human), None)
+    return {
+        "hands_played": sess.hands_played,
+        "starting_stack": sess.starting_bankroll,
+        "human": (
+            {
+                "name": human.name,
+                "stack": human.stack,
+                "hands_played": human.hands_played,
+                "hands_won": human.hands_won,
+                "profit_total": human.profit_total,
+                "win_rate_pct": (
+                    round(human.hands_won / human.hands_played * 100, 1)
+                    if human.hands_played else 0.0
+                ),
+            }
+            if human else None
+        ),
+        "personalities": _personality_aggregates(seats),
+        "seats": [s.to_dict() for s in seats],
     }
 
 
@@ -533,6 +611,7 @@ __all__ = [
     "create_session",
     "get_current_session",
     "get_token",
+    "session_stats",
     "start_hand",
     "take_action",
 ]

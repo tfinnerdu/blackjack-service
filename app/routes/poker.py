@@ -22,6 +22,7 @@ from ..services.poker_games import (
     active_hand_view,
     create_session,
     get_current_session,
+    session_stats,
     start_hand,
     take_action,
 )
@@ -220,6 +221,14 @@ def active_hand_endpoint():
     if view is None:
         return _err("no hand in progress", "NO_HAND", 404)
     return jsonify(view)
+
+
+@bp.get("/sessions/me/stats")
+def session_stats_endpoint():
+    sess = get_current_session()
+    if not sess:
+        return _err("no active poker session", "NO_SESSION", 404)
+    return jsonify(session_stats(sess))
 
 
 @bp.post("/sessions/me/hands/active/action")
