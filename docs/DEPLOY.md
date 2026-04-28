@@ -23,7 +23,7 @@ in one click.
    ```
    Then it boots gunicorn:
    ```
-   gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT wsgi:app
+   gunicorn -k gthread --threads 4 -w 1 -b 0.0.0.0:$PORT wsgi:app
    ```
 5. First boot creates the SQLite-or-Postgres tables and seeds the four
    built-in templates (Vegas Strip, Vegas Downtown, Single-Deck,
@@ -54,7 +54,7 @@ the database).
      ```
    - **Start Command**:
      ```
-     gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT wsgi:app
+     gunicorn -k gthread --threads 4 -w 1 -b 0.0.0.0:$PORT wsgi:app
      ```
    - **Instance Type**: Free (works fine for a personal trainer)
 4. Environment variables (add each):

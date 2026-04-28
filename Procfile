@@ -1,1 +1,1 @@
-web: gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT wsgi:app
+web: gunicorn -k gthread --threads 4 -w 1 -b 0.0.0.0:$PORT wsgi:app
