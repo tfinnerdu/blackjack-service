@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { CardFace } from "../components/Card";
+import { LoadingScreen } from "../components/LoadingScreen";
 import {
   ApiError,
   Baccarat as BaccaratApi,
@@ -129,7 +130,10 @@ export default function Baccarat() {
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-white/40">loading…</div>;
+    return <LoadingScreen
+      label="loading baccarat shoe…"
+      hint="First load can take a moment if the server has been idle."
+    />;
   }
 
   if (!session) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { LoadingScreen } from "../components/LoadingScreen";
 import {
   ApiError,
   SportsAnalytics,
@@ -182,7 +183,10 @@ export default function Sportsbook() {
   }, [slipLegs, stake]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-white/40">loading…</div>;
+    return <LoadingScreen
+      label="loading sportsbook…"
+      hint="First load can take a moment if the server has been idle."
+    />;
   }
 
   if (!session) {

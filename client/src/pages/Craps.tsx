@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { CrapsTable } from "../components/CrapsTable";
 import { Dice } from "../components/Dice";
+import { LoadingScreen } from "../components/LoadingScreen";
 import {
   ApiError,
   CasinoParticipant,
@@ -136,7 +137,10 @@ export default function Craps() {
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-white/40">loading…</div>;
+    return <LoadingScreen
+      label="loading craps table…"
+      hint="First load can take a moment if the server has been idle."
+    />;
   }
 
   if (!session) {

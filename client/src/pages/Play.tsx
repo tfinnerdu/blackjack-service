@@ -6,6 +6,7 @@ import { CoachPanel } from "../components/CoachPanel";
 import { Dealer } from "../components/Dealer";
 import { RoundSummary } from "../components/RoundSummary";
 import { SeatBlock, SeatPresenceDot } from "../components/Seat";
+import { LoadingScreen } from "../components/LoadingScreen";
 import { TableSurface } from "../components/TableSurface";
 import { ApiError, Rounds, Seat, Sessions } from "../lib/api";
 import { useApp } from "../lib/store";
@@ -102,11 +103,10 @@ export default function Play() {
   }
 
   if (!session) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-white/40">
-        loading session…
-      </div>
-    );
+    return <LoadingScreen
+      label="loading blackjack table…"
+      hint="First load can take a moment if the server has been idle."
+    />;
   }
 
   const callerSeat = session.caller_seat ?? session.player_seat;

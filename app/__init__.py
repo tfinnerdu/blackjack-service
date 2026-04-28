@@ -132,3 +132,19 @@ def _register_spa_fallback(app: Flask) -> None:
             version=VERSION,
             message="React bundle not built yet. Run `npm run build` in client/.",
         )
+
+    # Flask registers its own static handler at `/<path:filename>` because
+    # we set static_folder + static_url_path="". That route shares
+    # specificity with our SPA fallback and (because it was registered
+    # first) wins for paths like `/roulette` — which then 404 because
+    # there's no file by that name in app/static. Catch the 404 and
+    # route it back through the SPA so refresh-on-a-React-route works.
+    @app.errorhandler(404)
+    def spa_404_fallback(_err):
+        from flask import request
+        if request.path.startswith("/api/"):
+            return jsonify(error="not found", code="NOT_FOUND"), 404
+        index = STATIC_DIR / "index.html"
+        if index.exists():
+            return send_from_directory(STATIC_DIR, "index.html")
+        return jsonify(error="not found", code="NOT_FOUND"), 404

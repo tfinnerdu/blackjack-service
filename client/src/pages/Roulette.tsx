@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { LoadingScreen } from "../components/LoadingScreen";
 import { RouletteWheel } from "../components/RouletteWheel";
 import {
   ApiError,
@@ -178,7 +179,10 @@ export default function Roulette() {
   }
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-white/40">loading…</div>;
+    return <LoadingScreen
+      label="loading roulette table…"
+      hint="First load can take a moment if the server has been idle."
+    />;
   }
 
   if (!session) {

@@ -28,6 +28,12 @@ export default function Setup() {
   const [bankroll, setBankroll] = useState(500);
   const [seats, setSeats] = useState(5);
   const [playerSeat, setPlayerSeat] = useState(3);
+  // Quick-edit knobs that override the selected template's defaults.
+  // Number of decks + blackjack payout are by far the most common
+  // tweaks the user wants to make per session — pulling them up here
+  // saves a trip into the template builder.
+  const [decks, setDecks] = useState(6);
+  const [bjPayout, setBjPayout] = useState<[number, number]>([3, 2]);
   const [aiByseat, setAiBySeat] = useState<Record<number, { playstyle: string; bet_pattern: string; base_bet: number }>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +64,10 @@ export default function Setup() {
     if (typeof r.seats === "number") setSeats(r.seats);
     if (typeof r.player_seat === "number") setPlayerSeat(r.player_seat);
     if (typeof r.starting_bankroll === "number") setBankroll(r.starting_bankroll);
+    if (typeof r.decks === "number") setDecks(r.decks);
+    if (Array.isArray(r.blackjack_payout) && r.blackjack_payout.length === 2) {
+      setBjPayout([Number(r.blackjack_payout[0]), Number(r.blackjack_payout[1])]);
+    }
   }, [selectedTemplate]);
 
   // Ensure player seat is within seats and AI map covers the rest.
@@ -91,7 +101,12 @@ export default function Setup() {
         starting_bankroll: bankroll,
         player_seat: playerSeat,
         ai_seats,
-        rules: { seats, player_seat: playerSeat },
+        rules: {
+          seats,
+          player_seat: playerSeat,
+          decks,
+          blackjack_payout: bjPayout,
+        },
       });
       setSession(sess);
       navigate("/play");
@@ -107,6 +122,26 @@ export default function Setup() {
     return Templates.list("blackjack")
       .then((d) => setTemplates(d.templates))
       .catch((e) => setError(String(e)));
+  }
+
+  function randomizeBots() {
+    // Roll a fresh playstyle + bet pattern + base bet for every AI
+    // seat. Useful when you want a chaotic table without fiddling
+    // with each seat's dropdowns. Base bet picks from a small set
+    // so the spread is realistic, not pennies-to-millions.
+    const baseBets = [5, 10, 15, 25, 50];
+    setAiBySeat((current) => {
+      const next: typeof current = {};
+      for (const k of Object.keys(current)) {
+        const seat = Number(k);
+        next[seat] = {
+          playstyle: PLAYSTYLES[Math.floor(Math.random() * PLAYSTYLES.length)],
+          bet_pattern: BET_PATTERNS[Math.floor(Math.random() * BET_PATTERNS.length)],
+          base_bet: baseBets[Math.floor(Math.random() * baseBets.length)],
+        };
+      }
+      return next;
+    });
   }
 
   function openEditorBlank() {
@@ -217,6 +252,44 @@ export default function Setup() {
           <NumberStepper value={bankroll} setValue={setBankroll} step={50} min={50} />
         </Section>
 
+        <Section title="Quick rules">
+          <div className="space-y-3">
+            <div>
+              <div className="text-xs text-white/60 mb-1">Decks</div>
+              <NumberStepper value={decks} setValue={setDecks} step={1} min={1} max={8} />
+            </div>
+            <div>
+              <div className="text-xs text-white/60 mb-1">Blackjack pays</div>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  [3, 2, "3 : 2"],
+                  [6, 5, "6 : 5"],
+                  [1, 1, "1 : 1"],
+                ] as const).map(([n, d, label]) => {
+                  const active = bjPayout[0] === n && bjPayout[1] === d;
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => setBjPayout([n, d])}
+                      className={`min-h-touch rounded-xl text-sm ${
+                        active
+                          ? "bg-white text-felt-dark font-semibold"
+                          : "border border-white/20 text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <p className="text-[11px] text-white/50">
+              Edits the selected template's defaults for this session only —
+              the saved template stays as-is.
+            </p>
+          </div>
+        </Section>
+
         <Section title="Table size">
           <NumberStepper value={seats} setValue={setSeats} step={1} min={1} max={7} />
         </Section>
@@ -241,6 +314,12 @@ export default function Setup() {
 
         {seats > 1 && (
           <Section title="Other players">
+            <button
+              onClick={randomizeBots}
+              className="w-full min-h-touch rounded-xl border border-white/30 text-sm mb-3"
+            >
+              🎲 Randomize all bots
+            </button>
             <div className="space-y-3">
               {Object.entries(aiByseat).map(([k, v]) => (
                 <div key={k} className="rounded-xl bg-felt p-3 space-y-2">

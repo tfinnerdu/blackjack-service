@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { CardFace } from "../components/Card";
+import { LoadingScreen } from "../components/LoadingScreen";
 import { TableSurface } from "../components/TableSurface";
 import { ApiError } from "../lib/api";
 import { PersonalityAggregate, Poker, PokerSessionView, RoundView } from "../lib/poker";
@@ -102,11 +103,10 @@ export default function PokerTable() {
   }
 
   if (!session) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-white/40">
-        loading session…
-      </div>
-    );
+    return <LoadingScreen
+      label="loading poker table…"
+      hint="First load can take a moment if the server has been idle."
+    />;
   }
 
   const human = round?.players.find((p) => p.is_human);
