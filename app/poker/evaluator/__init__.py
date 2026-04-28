@@ -15,11 +15,15 @@ from .high import (
     best_high,
     classify_high,
 )
+from .wilds import WildMode, evaluate_with_wilds, joker_indices
 
 __all__ = [
     "HAND_CLASS_NAMES",
     "HandClass",
     "HandRank",
+    "WildMode",
     "best_high",
     "classify_high",
+    "evaluate_with_wilds",
+    "joker_indices",
 ]
