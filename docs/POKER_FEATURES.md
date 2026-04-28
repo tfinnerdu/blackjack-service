@@ -79,16 +79,49 @@ ships next phase.
 
 ---
 
+## Simulator mode (now live)
+
+Companion's the helper at the table. Simulator's the trainer when nobody's
+around to deal you a hand.
+
+- **Hold'em + the home-game 53-card joker variant** are playable end-to-end
+  against AI opponents. Heads-up, full ring, anywhere in between.
+- **9 AI personalities** — pick any combination, name each opponent
+  whatever you want:
+
+  | Personality | Behavior |
+  |---|---|
+  | **Book** | Tight-aggressive baseline. Folds bad, bets/raises good. |
+  | **Tight** | Scared, only premium hands. Folds to pressure. |
+  | **Loose** | Calls a lot. Doesn't fold to small bets. |
+  | **Aggressive** | Maniac. Raises constantly. |
+  | **Calling station** | Calls everything. Never raises. |
+  | **Bluffer** | Book strength most of the time, ~25% river bluff frequency on weak hands. |
+  | **Hot/cold** | Modulates by recent profit streak. Presses when up, tightens when down. |
+  | **Drunk** | Book play with a configurable mistake rate. |
+  | **Mimic** | Always check/call minimum. Never raises, rarely folds. |
+
+- **Real chip stacks**, blinds, side pots when someone is all-in.
+  No bonus chips, no level-up nonsense. When you're out of stack, you're out.
+
+The simulator uses simple hand-strength heuristics rather than a full
+equity calculator. That's by design — these bots are recognizable
+archetypes (your buddy who calls everything, your buddy who bluffs every
+river), not GTO solvers. You're meant to learn how to *adjust to
+different player types*, not to beat a Monte Carlo simulator.
+
 ## What's coming next
 
 - **Wild rule builder** UI: declare your own wilds for custom variants
+  (the engine already supports it via inline VariantSpec; the UI to
+  build them visually is the next natural step)
 - **Triggered wilds**: "after a Queen face-up, the next card is wild" type
   rules baked into the deal loop
 - **Saved variants**: punch in a new variant once, save it, pick it next
   poker night
-- **Simulator mode** with AI opponents: full deal/state machine + bot
-  bets/folds for the variants we've shipped, so the trainer side of the
-  app catches up to the helper side
+- **Stud + draw simulators**: 7-Stud, Razz, 5-Card Draw, 2-7 Triple
+  Draw. Each needs its own state machine — Hold'em's was first because
+  it's the most common.
 - **Equity calculator**: "how often do I win this hand to the river?"
   Monte Carlo against random opponents
 
