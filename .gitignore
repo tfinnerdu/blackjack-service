@@ -29,3 +29,4 @@ app/static/
 .vscode/
 .idea/
 .DS_Store
+/.vs
