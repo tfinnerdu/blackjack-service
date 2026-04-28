@@ -102,6 +102,108 @@ def test_analyze_unknown_variant_returns_404():
     assert r.status_code == 404
 
 
+def test_save_user_variant_then_appears_in_list():
+    client = _client()
+    body = {
+        "name": "My Home Game",
+        "description": "Custom variant",
+        "family": "home",
+        "deck": {"decks": 1, "jokers": 1},
+        "deal": {
+            "hole_cards": 5, "up_cards": 0,
+            "community_streets": [], "stud_streets": [],
+            "stud_face_down_final": False, "draws": [],
+        },
+        "wilds": [{"kind": "joker", "mode": "fully_wild"}],
+        "hand": "exactly_5_hole",
+        "hi_lo": "hi_only",
+        "lo_rule": None,
+        "lo_eight_or_better": False,
+        "notes": "",
+    }
+    r = client.post(
+        "/api/v1/poker/variants",
+        data=json.dumps(body),
+        content_type="application/json",
+    )
+    assert r.status_code == 201
+    saved = r.get_json()
+    assert saved["_saved_template_id"]
+
+    # Now list — should appear after the built-ins.
+    listed = client.get("/api/v1/poker/variants").get_json()["variants"]
+    names = [v["name"] for v in listed]
+    assert "My Home Game" in names
+    assert "Texas Hold'em" in names
+
+
+def test_save_variant_rejects_duplicate_name():
+    client = _client()
+    body = {
+        "name": "Dup",
+        "description": "x",
+        "family": "home",
+        "deck": {"decks": 1, "jokers": 0},
+        "deal": {
+            "hole_cards": 5, "up_cards": 0,
+            "community_streets": [], "stud_streets": [],
+            "stud_face_down_final": False, "draws": [],
+        },
+        "wilds": [],
+        "hand": "exactly_5_hole",
+        "hi_lo": "hi_only",
+        "lo_rule": None,
+        "lo_eight_or_better": False,
+        "notes": "",
+    }
+    r1 = client.post("/api/v1/poker/variants",
+                     data=json.dumps(body), content_type="application/json")
+    assert r1.status_code == 201
+    r2 = client.post("/api/v1/poker/variants",
+                     data=json.dumps(body), content_type="application/json")
+    assert r2.status_code == 400
+
+
+def test_delete_user_variant_works():
+    client = _client()
+    body = {
+        "name": "Throwaway",
+        "description": "x",
+        "family": "home",
+        "deck": {"decks": 1, "jokers": 0},
+        "deal": {
+            "hole_cards": 5, "up_cards": 0,
+            "community_streets": [], "stud_streets": [],
+            "stud_face_down_final": False, "draws": [],
+        },
+        "wilds": [],
+        "hand": "exactly_5_hole",
+        "hi_lo": "hi_only",
+        "lo_rule": None,
+        "lo_eight_or_better": False,
+        "notes": "",
+    }
+    r1 = client.post("/api/v1/poker/variants",
+                     data=json.dumps(body), content_type="application/json")
+    tid = r1.get_json()["_saved_template_id"]
+    r2 = client.delete(f"/api/v1/poker/variants/{tid}")
+    assert r2.status_code == 204
+
+
+def test_cannot_delete_builtin_variant_via_poker_route():
+    """Built-in variants live in `all_variants()`, not in the templates table,
+    so they don't have a template_id. But if a user tries to delete a
+    blackjack template via this route, it 404s (game_type filter)."""
+    client = _client()
+    # Find a blackjack template and try to delete via the poker route.
+    blackjack = client.get("/api/v1/templates?game_type=blackjack").get_json()
+    if not blackjack["templates"]:
+        return
+    bid = blackjack["templates"][0]["id"]
+    r = client.delete(f"/api/v1/poker/variants/{bid}")
+    assert r.status_code == 404
+
+
 def test_analyze_with_inline_variant_dict():
     r = _client().post(
         "/api/v1/poker/analyze",

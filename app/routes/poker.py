@@ -4,6 +4,8 @@ use ahead of the variant DSL landing in phase 3.
 """
 from __future__ import annotations
 
+import json
+
 from flask import Blueprint, jsonify, request
 
 from ..db import db
@@ -73,9 +75,73 @@ def deck_peek():
 
 @bp.get("/variants")
 def list_variants():
-    """Built-in variant library. Phase 4 layers user-saved variants from
-    SettingsTemplate (game_type='poker') on top of these."""
-    return jsonify(variants=[v.to_dict() for v in all_variants()])
+    """Built-in variant library merged with user-saved variants
+    (SettingsTemplate rows with game_type='poker'). Built-ins come first."""
+    from ..models import SettingsTemplate
+
+    payload = [v.to_dict() for v in all_variants()]
+    user_saved = (
+        SettingsTemplate.query
+        .filter_by(game_type="poker", is_builtin=False)
+        .order_by(SettingsTemplate.name.asc())
+        .all()
+    )
+    for t in user_saved:
+        # User templates store the variant blob in rules_json (we reuse the
+        # column rather than adding a new one for v1).
+        spec = json.loads(t.rules_json)
+        spec.setdefault("name", t.name)
+        spec.setdefault("description", t.description)
+        # Annotate so the UI can show 'saved' and offer a delete control.
+        spec["_saved_template_id"] = t.id
+        payload.append(spec)
+    return jsonify(variants=payload)
+
+
+@bp.post("/variants")
+def save_variant():
+    """Persist a user-built variant under SettingsTemplate(game_type='poker').
+    Body must be a complete VariantSpec dict (the same shape POST /analyze
+    accepts inline)."""
+    from ..models import SettingsTemplate
+
+    body = request.get_json() or {}
+    try:
+        spec = VariantSpec.from_dict(body)
+    except (KeyError, ValueError) as e:
+        return _err(str(e), "BAD_REQUEST")
+    name = spec.name.strip()
+    if not name:
+        return _err("name required", "BAD_REQUEST")
+    if SettingsTemplate.query.filter_by(name=name).first():
+        return _err("name already exists", "DUPLICATE")
+    t = SettingsTemplate(
+        game_type="poker",
+        name=name,
+        description=spec.description,
+        rules_json=json.dumps(spec.to_dict()),
+        side_bets_json="{}",
+        is_builtin=False,
+    )
+    db.session.add(t)
+    db.session.commit()
+    out = spec.to_dict()
+    out["_saved_template_id"] = t.id
+    return jsonify(out), 201
+
+
+@bp.delete("/variants/<int:template_id>")
+def delete_variant(template_id: int):
+    from ..models import SettingsTemplate
+
+    t = db.session.get(SettingsTemplate, template_id)
+    if not t or t.game_type != "poker":
+        return _err("variant not found", "NOT_FOUND", 404)
+    if t.is_builtin:
+        return _err("cannot delete a built-in variant", "BUILTIN_READ_ONLY", 403)
+    db.session.delete(t)
+    db.session.commit()
+    return ("", 204)
 
 
 @bp.get("/personalities")

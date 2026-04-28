@@ -150,7 +150,15 @@ export interface RoundView {
 }
 
 export const Poker = {
-  variants: () => http<{ variants: VariantSpec[] }>("GET", "/api/v1/poker/variants"),
+  variants: () => http<{ variants: (VariantSpec & { _saved_template_id?: number })[] }>(
+    "GET", "/api/v1/poker/variants",
+  ),
+  saveVariant: (variant: VariantSpec) =>
+    http<VariantSpec & { _saved_template_id: number }>(
+      "POST", "/api/v1/poker/variants", variant,
+    ),
+  deleteVariant: (templateId: number) =>
+    http<void>("DELETE", `/api/v1/poker/variants/${templateId}`),
   personalities: () => http<{ personalities: string[] }>("GET", "/api/v1/poker/personalities"),
   analyze: (body: {
     variant: string | VariantSpec;

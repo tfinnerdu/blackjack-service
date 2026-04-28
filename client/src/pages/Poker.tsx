@@ -7,8 +7,10 @@ import { CompanionAnalysisView, Poker, VariantSpec } from "../lib/poker";
 
 type Slot = "cards" | "hole" | "board";
 
+type VariantWithMeta = VariantSpec & { _saved_template_id?: number };
+
 export default function PokerPage() {
-  const [variants, setVariants] = useState<VariantSpec[]>([]);
+  const [variants, setVariants] = useState<VariantWithMeta[]>([]);
   const [variantName, setVariantName] = useState<string | null>(null);
   const [hole, setHole] = useState<string[]>([]);
   const [board, setBoard] = useState<string[]>([]);
@@ -17,6 +19,9 @@ export default function PokerPage() {
   const [analysis, setAnalysis] = useState<CompanionAnalysisView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorJson, setEditorJson] = useState("");
+  const [editorError, setEditorError] = useState<string | null>(null);
 
   useEffect(() => {
     Poker.variants()
@@ -31,6 +36,69 @@ export default function PokerPage() {
     () => variants.find((v) => v.name === variantName) ?? null,
     [variants, variantName],
   );
+
+  function refreshVariants() {
+    return Poker.variants()
+      .then((d) => setVariants(d.variants))
+      .catch((e) => setError(String(e)));
+  }
+
+  function openEditorClone() {
+    if (!variant) return;
+    const clone = { ...variant, name: `${variant.name} (copy)` };
+    delete (clone as VariantWithMeta)._saved_template_id;
+    setEditorJson(JSON.stringify(clone, null, 2));
+    setEditorError(null);
+    setEditorOpen(true);
+  }
+
+  function openEditorBlank() {
+    setEditorJson(JSON.stringify({
+      name: "My Custom Variant",
+      description: "",
+      family: "home",
+      deck: { decks: 1, jokers: 1 },
+      deal: {
+        hole_cards: 5, up_cards: 0,
+        community_streets: [], stud_streets: [],
+        stud_face_down_final: false, draws: [],
+      },
+      wilds: [{ kind: "joker", mode: "fully_wild" }],
+      hand: "exactly_5_hole",
+      hi_lo: "hi_only",
+      lo_rule: null,
+      lo_eight_or_better: false,
+      notes: "",
+    }, null, 2));
+    setEditorError(null);
+    setEditorOpen(true);
+  }
+
+  async function saveEditor() {
+    let parsed: VariantSpec;
+    try {
+      parsed = JSON.parse(editorJson);
+    } catch {
+      setEditorError("invalid JSON");
+      return;
+    }
+    try {
+      const saved = await Poker.saveVariant(parsed);
+      await refreshVariants();
+      setVariantName(saved.name);
+      setEditorOpen(false);
+    } catch (e) {
+      setEditorError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+    }
+  }
+
+  async function deleteSelectedVariant() {
+    if (!variant?._saved_template_id) return;
+    if (!confirm(`Delete "${variant.name}"?`)) return;
+    await Poker.deleteVariant(variant._saved_template_id);
+    await refreshVariants();
+    setVariantName("Texas Hold'em");
+  }
 
   const isOmaha = variant?.hand === "omaha_2_hole_3_board";
   const jokersAllowed = (variant?.deck.jokers ?? 0) > 0;
@@ -126,6 +194,28 @@ export default function PokerPage() {
           {variant && variant.notes && (
             <p className="text-xs text-amber-200/70 mt-1">{variant.notes}</p>
           )}
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            <button
+              onClick={openEditorBlank}
+              className="min-h-touch rounded-lg border border-white/20 text-xs"
+            >
+              + New
+            </button>
+            <button
+              onClick={openEditorClone}
+              disabled={!variant}
+              className="min-h-touch rounded-lg border border-white/20 text-xs disabled:opacity-40"
+            >
+              Clone
+            </button>
+            <button
+              onClick={deleteSelectedVariant}
+              disabled={!variant?._saved_template_id}
+              className="min-h-touch rounded-lg border border-red-300/40 text-red-200 text-xs disabled:opacity-30"
+            >
+              Delete
+            </button>
+          </div>
         </div>
 
         {/* Slot tabs (Omaha) or single slot (everything else) */}
@@ -198,6 +288,75 @@ export default function PokerPage() {
         </div>
 
         {analysis && <AnalysisView a={analysis} />}
+      </div>
+
+      {editorOpen && (
+        <VariantEditorSheet
+          json={editorJson}
+          onJsonChange={setEditorJson}
+          onSave={saveEditor}
+          onClose={() => setEditorOpen(false)}
+          error={editorError}
+        />
+      )}
+    </div>
+  );
+}
+
+function VariantEditorSheet({
+  json,
+  onJsonChange,
+  onSave,
+  onClose,
+  error,
+}: {
+  json: string;
+  onJsonChange: (s: string) => void;
+  onSave: () => void;
+  onClose: () => void;
+  error: string | null;
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
+      <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
+        <div className="flex items-center justify-between">
+          <div className="text-lg font-semibold">Edit variant</div>
+          <button onClick={onClose} className="text-white/60 text-lg">
+            ✕
+          </button>
+        </div>
+        <p className="text-xs text-white/60">
+          Edit the JSON below. Required fields: name, family, deck, deal,
+          wilds, hand, hi_lo. The companion treats the variant as a custom
+          one — pre-flop / draw / community streets all honored.
+        </p>
+        <textarea
+          value={json}
+          onChange={(e) => onJsonChange(e.target.value)}
+          spellCheck={false}
+          className="flex-1 rounded-lg bg-felt-dark text-white p-2 font-mono text-xs"
+        />
+        {error && <div className="text-red-300 text-sm">{error}</div>}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onClose}
+            className="min-h-touch rounded-xl border border-white/20"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            className="min-h-touch rounded-xl bg-white text-felt-dark font-semibold"
+          >
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );
