@@ -123,6 +123,20 @@ export default function Home() {
               </Link>
             </div>
           </div>
+
+          <ModeCard
+            title="Sports betting simulator"
+            blurb="Paper-trade single bets and parlays against a daily NBA/NFL/MLB/NHL slate. Hit 'advance day' to settle and see how your strategy actually played out."
+            primary={
+              <Link
+                to="/sportsbook"
+                className="block w-full min-h-touch flex items-center justify-center rounded-xl bg-white text-felt-dark font-semibold"
+              >
+                Open the book
+              </Link>
+            }
+            secondary={null}
+          />
         </div>
 
         <Link

@@ -286,6 +286,145 @@ export const Seat = {
     ),
 };
 
+// ---- sportsbook -------------------------------------------------------
+
+export interface SportsMarket {
+  id: number;
+  event_id: number;
+  market_type: "moneyline" | "spread" | "total" | string;
+  selections: Array<{
+    key: string;
+    label: string;
+    odds: number;
+    line: number | null;
+  }>;
+  status: string;
+  winner_key: string | null;
+}
+
+export interface SportsEvent {
+  id: number;
+  sport: string;
+  league: string;
+  home_team: string;
+  away_team: string;
+  day: number;
+  status: "scheduled" | "final" | string;
+  home_score: number | null;
+  away_score: number | null;
+  markets: SportsMarket[];
+}
+
+export interface SportsSlipLeg {
+  market_id: number;
+  selection_key: string;
+  odds: number;
+  label?: string;
+  line?: number | null;
+  market_type?: string;
+  event_id?: number;
+  event_label?: string;
+  event_day?: number;
+  outcome?: "won" | "lost" | "push" | "void" | null;
+}
+
+export interface SportsSlip {
+  id: number;
+  slip_type: "single" | "parlay";
+  legs: SportsSlipLeg[];
+  stake: number;
+  potential_payout: number;
+  status: "pending" | "won" | "lost" | "push" | "void";
+  payout_actual: number;
+  net: number;
+  placed_at: string;
+  placed_on_day: number;
+  settled_at: string | null;
+  leg_results: SportsSlipLeg[] | null;
+}
+
+export interface SportsbookSessionView {
+  id: number;
+  token: string;
+  starting_bankroll: number;
+  bankroll: number;
+  current_day: number;
+  slips_placed: number;
+  slips_won: number;
+  slips_lost: number;
+  slips_pushed: number;
+  total_staked: number;
+  total_returned: number;
+  analytics_summary?: SportsAnalyticsSummary;
+}
+
+export interface SportsAnalyticsSummary {
+  bankroll: number;
+  starting_bankroll: number;
+  net_profit: number;
+  total_staked: number;
+  total_returned: number;
+  roi_pct: number;
+  slips_placed: number;
+  slips_won: number;
+  slips_lost: number;
+  slips_pushed: number;
+  win_rate_pct: number;
+  settled_count: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+}
+
+export interface SportsAnalytics {
+  summary: SportsAnalyticsSummary;
+  by_market_type: Record<string, { won: number; lost: number; push: number }>;
+  by_slip_type: Record<string, {
+    won: number; lost: number; push: number;
+    staked: number; returned: number;
+  }>;
+  streak: { sign: number; count: number };
+  surprising_losses: Array<{
+    slip_id: number;
+    leg_label: string | null;
+    event_label: string | null;
+    odds: number;
+  }>;
+}
+
+export const Sportsbook = {
+  create: (body?: { starting_bankroll?: number; seed?: number }) =>
+    http<SportsbookSessionView>(
+      "POST",
+      "/api/v1/sportsbook/sessions",
+      body ?? {},
+    ),
+  me: () => http<SportsbookSessionView>("GET", "/api/v1/sportsbook/sessions/me"),
+  events: () =>
+    http<{ events: SportsEvent[]; current_day: number }>(
+      "GET",
+      "/api/v1/sportsbook/sessions/me/events",
+    ),
+  slips: () =>
+    http<{ slips: SportsSlip[] }>("GET", "/api/v1/sportsbook/sessions/me/slips"),
+  placeSlip: (legs: Array<{ market_id: number; selection_key: string }>, stake: number) =>
+    http<SportsSlip>(
+      "POST",
+      "/api/v1/sportsbook/sessions/me/slips",
+      { legs, stake },
+    ),
+  advance: () =>
+    http<{
+      current_day: number;
+      events_resolved: SportsEvent[];
+      slips_settled: SportsSlip[];
+    }>("POST", "/api/v1/sportsbook/sessions/me/advance", {}),
+  analytics: () =>
+    http<SportsAnalytics>("GET", "/api/v1/sportsbook/sessions/me/analytics"),
+  destroy: () =>
+    http<{ deleted: boolean }>("DELETE", "/api/v1/sportsbook/sessions/me"),
+};
+
 // ---- rounds -----------------------------------------------------------
 
 export interface StartRoundBody {

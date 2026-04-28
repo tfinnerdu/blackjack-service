@@ -7,7 +7,7 @@ session that landed the punch-list. Read this first, then `git log
 ## Current state
 
 - **Branch:** `main` is the only working branch. Pushes redeploy Render.
-- **Tests:** 509 backend pytest, frontend typecheck + build clean.
+- **Tests:** 534 backend pytest, frontend typecheck + build clean.
 - **Render:** live at the user's blackjack-service URL. gthread workers,
   Postgres free tier. Health = `/health`.
 - **Local dev ports:** Flask `5050`, Vite `5174` (project-specific
@@ -225,7 +225,67 @@ page renders a guest-only bet picker for non-host callers.
 3 new room-code tests in `tests/test_room_code.py` cover the new
 endpoint (set / view / table-limit validation).
 
-### 9. Lower-priority parking lot — three of four landed earlier
+### 9. ✅ Sports betting simulator — landed (paper trading)
+
+Paper-trade single bets and parlays against a daily slate of NBA /
+NFL / MLB / NHL events. The tool deliberately runs on local
+fixtures (no API keys, no rate limits, no scoring delays) so a user
+can iterate quickly: place slips, hit "advance day", see how their
+strategy actually performed.
+
+**Backend** (`app/sportsbook/`, `app/services/sportsbook.py`,
+`app/routes/sportsbook.py`):
+- 4 new tables: `SportsbookSession`, `SportsEvent`, `BettingMarket`,
+  `BettingSlip`. Events are global by `day` so multiple sessions can
+  bet against the same slate.
+- `app/sportsbook/odds.py`: American↔decimal conversion, parlay
+  decimal-odds product, `settle_slip` with the proper push-leg drop
+  semantics (a parlay leg that pushes shrinks the parlay rather
+  than killing it; all-push refunds stake).
+- `app/sportsbook/fixtures.py`: deterministic slate generator. Picks
+  teams from per-sport pools, draws moneyline/spread/total odds in
+  realistic ranges, simulates final scores so the markets resolve
+  in believable ways.
+- `advance_day` resolves every still-scheduled event at `day < new_day`
+  and settles every pending slip whose legs are now fully resolved.
+  Tops up the future slate so the user always has lookahead games.
+- `session_analytics` returns: bankroll / ROI / win rate, per-market-
+  type hit rate, single-vs-parlay split, current streak, and a
+  "surprising losses" cut (legs at +200 or longer that didn't hit).
+
+**API**:
+- `POST /api/v1/sportsbook/sessions` — create + seed a 3-day slate
+- `GET /sessions/me` — session view + analytics summary
+- `GET /sessions/me/events` — open events + markets
+- `GET /sessions/me/slips` — caller's slips (pending + settled)
+- `POST /sessions/me/slips` — place single or parlay
+- `POST /sessions/me/advance` — bump day, settle, top up slate
+- `GET /sessions/me/analytics` — full analytics breakdown
+
+**Frontend** (`client/src/pages/Sportsbook.tsx`): tabbed UI —
+Events / Slips / Analytics. Event cards show all three markets with
+a tappable selection; tapping toggles a leg in the slip builder.
+The slip builder previews combined odds, stake stepper, and
+"to win" calculation. Slips tab shows pending + settled with
+per-leg outcomes (won/lost/push dot indicators). Analytics tab
+shows ROI, hit rate, by-market breakdown, single vs parlay, current
+streak, and a surprising-losses list.
+
+**Tests**: 25 in `tests/test_sportsbook.py` covering odds math,
+parlay edge cases (loss kills slip, push drops from product, all-push
+refund, pending leg keeps slip pending), fixture determinism, end-
+to-end advance-day settlement, parlay-same-market guard, and
+analytics rollup.
+
+**Future work** (not in scope for this session):
+- Wire a real odds-feed (The Odds API has a 500/month free tier).
+  Each market already has an `external_id` slot; a thin client
+  in `app/sportsbook/feed.py` is the next step.
+- Live scores polling instead of pre-rolled fixture scores.
+- Prop-bet markets (player points, etc.) — needs a richer market
+  schema.
+
+### 10. Lower-priority parking lot — three of four landed earlier
 
 - **✅ Stud bring-in mechanics**: 3rd-street lowest up-card brings in
   (highest in Razz), suit tie-break C < D < H < S. 4th-street onward

@@ -10,6 +10,7 @@ import PokerSetup from "./pages/PokerSetup";
 import PokerTable from "./pages/PokerTable";
 import Roulette from "./pages/Roulette";
 import Setup from "./pages/Setup";
+import Sportsbook from "./pages/Sportsbook";
 import Stats from "./pages/Stats";
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/roulette" element={<Roulette />} />
         <Route path="/baccarat" element={<Baccarat />} />
         <Route path="/craps" element={<Craps />} />
+        <Route path="/sportsbook" element={<Sportsbook />} />
       </Routes>
     </BrowserRouter>
   );

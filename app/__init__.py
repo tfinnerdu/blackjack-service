@@ -89,6 +89,7 @@ def _register_routes(app: Flask) -> None:
     from .routes.poker import bp as poker_bp
     from .routes.roulette import bp as roulette_bp
     from .routes.sessions import bp as sessions_bp
+    from .routes.sportsbook import bp as sportsbook_bp
     from .routes.strategy import bp as strategy_bp
     from .routes.templates import bp as templates_bp
 
@@ -99,6 +100,7 @@ def _register_routes(app: Flask) -> None:
     app.register_blueprint(poker_bp)
     app.register_blueprint(roulette_bp)
     app.register_blueprint(sessions_bp)
+    app.register_blueprint(sportsbook_bp)
     app.register_blueprint(strategy_bp)
     app.register_blueprint(templates_bp)
 

@@ -348,6 +348,181 @@ class CasinoSession(db.Model):
         }
 
 
+class SportsbookSession(db.Model):
+    """Paper-trading sports-betting session. The user places single
+    bets and parlays against `SportsEvent` markets; we settle them
+    once the events resolve and track ROI / win-rate / streaks.
+
+    Demo mode loads a rotating fixture of plausible events; future
+    work can wire in a real odds-feed without changing the rest of
+    the schema (markets carry an `external_id` slot for that).
+    """
+    __tablename__ = "sportsbook_session"
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), nullable=False, unique=True, default=_new_token)
+    starting_bankroll = db.Column(db.Integer, nullable=False)
+    bankroll = db.Column(db.Integer, nullable=False)
+    # `current_day` is a synthetic day cursor used by the settlement
+    # button: each "advance day" flips events scheduled for today
+    # into final results and settles all pending slips that referenced
+    # them. Lets a user iterate quickly without waiting for real life.
+    current_day = db.Column(db.Integer, nullable=False, default=0)
+    # Cached counters so analytics queries don't have to scan slips.
+    slips_placed = db.Column(db.Integer, nullable=False, default=0)
+    slips_won = db.Column(db.Integer, nullable=False, default=0)
+    slips_lost = db.Column(db.Integer, nullable=False, default=0)
+    slips_pushed = db.Column(db.Integer, nullable=False, default=0)
+    total_staked = db.Column(db.Integer, nullable=False, default=0)
+    total_returned = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False,
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "token": self.token,
+            "starting_bankroll": self.starting_bankroll,
+            "bankroll": self.bankroll,
+            "current_day": self.current_day,
+            "slips_placed": self.slips_placed,
+            "slips_won": self.slips_won,
+            "slips_lost": self.slips_lost,
+            "slips_pushed": self.slips_pushed,
+            "total_staked": self.total_staked,
+            "total_returned": self.total_returned,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class SportsEvent(db.Model):
+    """A single sporting event (e.g. 'Lakers @ Celtics'). Sessions
+    don't own events — events are global and scoped by `day` so
+    multiple sessions can bet against the same fixture set."""
+    __tablename__ = "sports_event"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sport = db.Column(db.String(32), nullable=False, index=True)
+    league = db.Column(db.String(32), nullable=False)
+    home_team = db.Column(db.String(80), nullable=False)
+    away_team = db.Column(db.String(80), nullable=False)
+    # Day cursor (0, 1, 2, ...). Resolved when the host of a
+    # SportsbookSession advances past it.
+    day = db.Column(db.Integer, nullable=False, index=True)
+    status = db.Column(db.String(16), nullable=False, default="scheduled")
+    # final scores once the day has been resolved
+    home_score = db.Column(db.Integer, nullable=True)
+    away_score = db.Column(db.Integer, nullable=True)
+    # Hook for a future live odds feed.
+    external_id = db.Column(db.String(80), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+
+    markets = db.relationship(
+        "BettingMarket",
+        backref="event",
+        lazy="select",
+        cascade="all, delete-orphan",
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "sport": self.sport,
+            "league": self.league,
+            "home_team": self.home_team,
+            "away_team": self.away_team,
+            "day": self.day,
+            "status": self.status,
+            "home_score": self.home_score,
+            "away_score": self.away_score,
+            "markets": [m.to_dict() for m in self.markets],
+        }
+
+
+class BettingMarket(db.Model):
+    """One market on an event — moneyline, spread, total, or a prop.
+    `selections_json` is the array of selectable outcomes with their
+    American odds. After the event settles, `winner_key` records
+    which selection paid (or "PUSH" / "VOID")."""
+    __tablename__ = "betting_market"
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sports_event.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    market_type = db.Column(db.String(32), nullable=False)
+    # JSON list of selections:
+    #   [{"key": "home", "label": "Lakers", "odds": -150, "line": null},
+    #    {"key": "away", "label": "Celtics", "odds": +130, "line": null}]
+    selections_json = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(16), nullable=False, default="open")
+    # Set on settle: "home" / "away" / "over" / "under" / "PUSH" / "VOID".
+    winner_key = db.Column(db.String(32), nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "event_id": self.event_id,
+            "market_type": self.market_type,
+            "selections": json.loads(self.selections_json),
+            "status": self.status,
+            "winner_key": self.winner_key,
+        }
+
+
+class BettingSlip(db.Model):
+    """A user's wager — single or parlay. `legs_json` is the array of
+    (market_id, selection_key, odds_at_placement) tuples. We store the
+    odds at placement so a market's odds shifting later doesn't change
+    the payout."""
+    __tablename__ = "betting_slip"
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(
+        db.Integer,
+        db.ForeignKey("sportsbook_session.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    slip_type = db.Column(db.String(16), nullable=False)  # "single" | "parlay"
+    legs_json = db.Column(db.Text, nullable=False)
+    stake = db.Column(db.Integer, nullable=False)
+    potential_payout = db.Column(db.Integer, nullable=False)
+    # "pending" | "won" | "lost" | "push" | "void"
+    status = db.Column(db.String(16), nullable=False, default="pending")
+    # On settle: dollar payout the user got back (0 on loss, stake on push,
+    # stake + winnings on win). Net = payout_actual - stake.
+    payout_actual = db.Column(db.Integer, nullable=False, default=0)
+    placed_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+    placed_on_day = db.Column(db.Integer, nullable=False)
+    settled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Per-leg results stored after settle for analytics surfaces.
+    leg_results_json = db.Column(db.Text, nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "slip_type": self.slip_type,
+            "legs": json.loads(self.legs_json),
+            "stake": self.stake,
+            "potential_payout": self.potential_payout,
+            "status": self.status,
+            "payout_actual": self.payout_actual,
+            "net": self.payout_actual - self.stake,
+            "placed_at": self.placed_at.isoformat() if self.placed_at else None,
+            "placed_on_day": self.placed_on_day,
+            "settled_at": self.settled_at.isoformat() if self.settled_at else None,
+            "leg_results": (
+                json.loads(self.leg_results_json) if self.leg_results_json else None
+            ),
+        }
+
+
 def _ensure_columns() -> None:
     """Idempotent boot migrations — a safety net for non-alembic DBs.
 
