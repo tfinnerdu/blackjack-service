@@ -94,6 +94,35 @@ export default function Home() {
               </Link>
             }
           />
+
+          <div className="rounded-xl bg-felt p-4 text-left space-y-3">
+            <div>
+              <div className="text-lg font-semibold">More casino games</div>
+              <div className="text-xs text-white/60">
+                One bankroll per game, rooms shareable like blackjack.
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Link
+                to="/roulette"
+                className="min-h-touch rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center text-sm"
+              >
+                Roulette
+              </Link>
+              <Link
+                to="/baccarat"
+                className="min-h-touch rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center text-sm"
+              >
+                Baccarat
+              </Link>
+              <Link
+                to="/craps"
+                className="min-h-touch rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center text-sm"
+              >
+                Craps
+              </Link>
+            </div>
+          </div>
         </div>
 
         <Link

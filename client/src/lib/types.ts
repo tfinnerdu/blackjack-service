@@ -139,7 +139,7 @@ export interface SessionView {
   side_bets: Record<string, unknown>;
   starting_bankroll: number;
   bankroll: number;
-  shoe: { seed: number; cards_dealt: number };
+  shoe: { seed: number; cards_dealt: number; shuffles?: number };
   counter: { running_count: number; cards_seen: number };
   player_seat: number;
   ai_seats: AISeatView[];

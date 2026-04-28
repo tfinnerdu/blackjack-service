@@ -124,9 +124,14 @@ class GameSession(db.Model):
     bankroll = db.Column(db.Integer, nullable=False)
     last_results_json = db.Column(db.Text, nullable=False, default="[]")
 
-    # Shoe + counter snapshot. Re-deal the shoe by seeding then discarding
-    # cards_dealt cards to reach the same state on resume.
+    # Shoe + counter snapshot. Re-deal the shoe by seeding, advancing
+    # the RNG by `shoe_shuffles - 1` extra shuffles to land on the
+    # current permutation, then discarding `cards_dealt` cards to reach
+    # the same position. Without `shoe_shuffles`, every page reload
+    # after the first reshuffle would put the shoe back into the
+    # initial permutation — visibly the same hands repeating.
     shoe_seed = db.Column(db.Integer, nullable=False)
+    shoe_shuffles = db.Column(db.Integer, nullable=False, default=1)
     cards_dealt = db.Column(db.Integer, nullable=False, default=0)
     running_count = db.Column(db.Integer, nullable=False, default=0)
     counter_cards_seen = db.Column(db.Integer, nullable=False, default=0)
@@ -197,6 +202,7 @@ class GameSession(db.Model):
             "shoe": {
                 "seed": self.shoe_seed,
                 "cards_dealt": self.cards_dealt,
+                "shuffles": self.shoe_shuffles or 1,
             },
             "counter": {
                 "running_count": self.running_count,
@@ -279,6 +285,69 @@ class PokerSession(db.Model):
         }
 
 
+class CasinoSession(db.Model):
+    """Generic casino-game session. Used by Roulette, Baccarat, Craps —
+    games with simple state and a per-spin / per-roll resolution model.
+
+    Blackjack and Poker keep their own tables because they have rich
+    in-flight state (round-state machines, AI seats, counters).
+
+    The `state_json` column holds game-specific state — for Roulette
+    that's the most-recent spin + bets; for Craps it's the point + bet
+    book; for Baccarat the most-recent shoe + dealt cards. The
+    `history_json` column holds a capped time-series the Stats UI can
+    plot without a separate query.
+    """
+    __tablename__ = "casino_session"
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), nullable=False, unique=True, default=_new_token)
+    # Game family discriminator: "roulette" | "baccarat" | "craps".
+    game_type = db.Column(db.String(32), nullable=False, index=True)
+    # Short shareable code so a host can invite friends to bet alongside
+    # them. Same alphabet as blackjack; resolved by the same helper.
+    room_code = db.Column(db.String(8), nullable=True, unique=True, index=True)
+    # Guest tokens scoped to this casino session — used for multi-player
+    # betting on the same wheel/roll. Map-of-guest-tokens; the host's
+    # own token always works.
+    guest_tokens_json = db.Column(db.Text, nullable=True, default="{}")
+
+    # Money + history.
+    starting_bankroll = db.Column(db.Integer, nullable=False)
+    bankroll = db.Column(db.Integer, nullable=False)
+    rounds_played = db.Column(db.Integer, nullable=False, default=0)
+
+    # Game-specific state + history.
+    rules_json = db.Column(db.Text, nullable=False, default="{}")
+    state_json = db.Column(db.Text, nullable=False, default="{}")
+    history_json = db.Column(db.Text, nullable=False, default="[]")
+
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=_utcnow,
+        onupdate=_utcnow,
+        nullable=False,
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "token": self.token,
+            "game_type": self.game_type,
+            "room_code": self.room_code,
+            "guest_tokens": json.loads(self.guest_tokens_json or "{}"),
+            "starting_bankroll": self.starting_bankroll,
+            "bankroll": self.bankroll,
+            "rounds_played": self.rounds_played,
+            "rules": json.loads(self.rules_json or "{}"),
+            "state": json.loads(self.state_json or "{}"),
+            "history": json.loads(self.history_json or "[]"),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 def _ensure_columns() -> None:
     """Idempotent boot migrations — a safety net for non-alembic DBs.
 
@@ -325,6 +394,7 @@ def _ensure_columns() -> None:
     _add("game_session", "bankroll_history_json", "TEXT NOT NULL DEFAULT '[]'")
     _add("game_session", "room_code", "VARCHAR(8)")
     _add("game_session", "seat_tokens_json", "TEXT")
+    _add("game_session", "shoe_shuffles", "INTEGER NOT NULL DEFAULT 1")
     # One-time backfill: legacy rows came in at the column default of 0,
     # but a pre-existing session's book / counter bankroll should start
     # from the original buy-in. Idempotent — only flips rows that are

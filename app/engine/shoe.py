@@ -109,8 +109,25 @@ class Shoe:
             return False
         return self._dealt >= self._cut_card_index
 
+    @property
+    def cards_to_cut(self) -> int:
+        """How many more cards can be dealt before the cut-card mark is
+        reached. Useful for the play UI: 'X cards before reshuffle'."""
+        if self.mode == ShuffleMode.CSM:
+            return self.total_cards
+        return max(0, self._cut_card_index - self._dealt)
+
+    # Cut-card jitter band, expressed as a fraction of total cards.
+    # Real dealers cut at slightly different positions each shuffle;
+    # we emulate that with a uniform offset in [-band, +band] around
+    # the configured `penetration` ratio. Set to 0.0 to disable.
+    CUT_CARD_JITTER = 0.04
+
     def shuffle(self) -> None:
-        """(Re)build the shoe from fresh decks."""
+        """(Re)build the shoe from fresh decks. Each shuffle re-rolls
+        the cut-card position within a small band so successive shoes
+        feel different — players reported the cut landing in the same
+        spot every shoe before this jitter existed."""
         cards = _build_packet(self.decks)
         if self.mode == ShuffleMode.HAND:
             self._cards = _hand_shuffle(cards, self._rng)
@@ -119,7 +136,13 @@ class Shoe:
             self._rng.shuffle(cards)
             self._cards = cards
         self._dealt = 0
-        self._cut_card_index = int(self.total_cards * self.penetration)
+        # Randomize cut around `penetration` within a clamped band.
+        if self.mode == ShuffleMode.CASINO and self.CUT_CARD_JITTER > 0:
+            jitter = self._rng.uniform(-self.CUT_CARD_JITTER, self.CUT_CARD_JITTER)
+            target = max(0.30, min(0.95, self.penetration + jitter))
+        else:
+            target = self.penetration
+        self._cut_card_index = int(self.total_cards * target)
         self.shuffles += 1
 
     def next_card(self) -> Card:

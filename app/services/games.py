@@ -368,12 +368,17 @@ def _replay_human_profit(
     different choices), which is fine — we only sum the human's profit.
     """
     # Rebuild a fresh shoe at the same point the actual round started from.
+    # Same shuffle-counter logic as shoe_from_session — replay needs to
+    # land on the current permutation, not the initial one.
     shoe = Shoe(
         decks=rules.decks,
         mode=rules.shuffle_mode,
         penetration=rules.penetration,
         seed=sess.shoe_seed,
     )
+    needed_shuffles = max(1, int(sess.shoe_shuffles or 1))
+    for _ in range(needed_shuffles - 1):
+        shoe.shuffle()
     if rules.shuffle_mode != ShuffleMode.CSM:
         for _ in range(started_at_dealt):
             shoe.next_card()
@@ -618,6 +623,12 @@ def start_round(sess: GameSession, req: StartRoundRequest) -> RoundView:
     shoe = shoe_from_session(sess)
     if shoe.needs_reshuffle:
         shoe.shuffle()
+        # Bump the persisted shuffle counter so the next page-load
+        # rebuilds the shoe at the same NEW permutation. Without this,
+        # rebuilding from (seed, cards_dealt) alone rewinds to the
+        # initial permutation — i.e. the user sees the same hands
+        # again after a reshuffle.
+        sess.shoe_shuffles = (sess.shoe_shuffles or 1) + 1
         sess.cards_dealt = 0
         sess.running_count = 0
         sess.counter_cards_seen = 0
@@ -735,6 +746,9 @@ def _load_active_round(sess: GameSession) -> tuple[Round, int, dict[int, AISeat]
         penetration=rules.penetration,
         seed=sess.shoe_seed,
     )
+    needed_shuffles = max(1, int(sess.shoe_shuffles or 1))
+    for _ in range(needed_shuffles - 1):
+        shoe.shuffle()
     if rules.shuffle_mode != ShuffleMode.CSM:
         for _ in range(started_at + consumed):
             shoe.next_card()

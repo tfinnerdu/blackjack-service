@@ -8,6 +8,7 @@ import { RoundSummary } from "../components/RoundSummary";
 import { SeatBlock, SeatPresenceDot } from "../components/Seat";
 import { ApiError, Rounds, Sessions } from "../lib/api";
 import { useApp } from "../lib/store";
+import type { SessionView } from "../lib/types";
 
 export default function Play() {
   const { session, round, setSession, setRound } = useApp();
@@ -148,9 +149,7 @@ export default function Play() {
           </div>
           <div className="font-mono text-xl">${headerBankroll}</div>
         </div>
-        <Link to="/stats" className="text-right text-xs text-white/60 underline">
-          Stats
-        </Link>
+        <ShoeBadge session={session} />
       </div>
 
       {joinLeaveToast && (
@@ -288,5 +287,34 @@ export default function Play() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ShoeBadge({ session }: { session: SessionView }) {
+  // Shows decks + cards remaining until cut card. Cut-card position
+  // varies per shuffle (jitter), so the count is approximate but
+  // close enough that a counter can plan around it. Falls back to
+  // "—" on a CSM table where there's no cut card.
+  const decks = session.rules.decks;
+  const isCsm = session.rules.shuffle_mode === "csm";
+  const dealt = session.shoe.cards_dealt ?? 0;
+  const totalCards = decks * 52;
+  // The server doesn't expose the per-shuffle cut index (it jitters
+  // around `penetration`); approximate by taking the configured
+  // penetration and subtracting cards_dealt.
+  const cutTarget = Math.round(totalCards * session.rules.penetration);
+  const cardsToCut = Math.max(0, cutTarget - dealt);
+
+  return (
+    <Link
+      to="/stats"
+      className="text-right text-[11px] leading-tight text-white/60 hover:text-white/80"
+      title="cards until cut · click for stats"
+    >
+      <div className="font-mono">{decks}D</div>
+      <div className="font-mono">
+        {isCsm ? "CSM" : `${cardsToCut} to cut`}
+      </div>
+    </Link>
   );
 }

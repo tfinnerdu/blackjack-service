@@ -286,9 +286,18 @@ def shoe_from_session(sess: GameSession) -> Shoe:
         penetration=rules.penetration,
         seed=sess.shoe_seed,
     )
+    # The constructor performs one initial shuffle. To reach permutation
+    # N, we have to call shuffle() (N-1) more times. Without this step,
+    # any session that's already crossed a reshuffle boundary would
+    # rewind to the initial permutation each time the shoe is rebuilt
+    # — i.e. the user would see the same hands repeat after a reshuffle.
+    needed_shuffles = max(1, int(sess.shoe_shuffles or 1))
+    for _ in range(needed_shuffles - 1):
+        shoe.shuffle()
     if sess.cards_dealt and rules.shuffle_mode != ShuffleMode.CSM:
-        # Burn forward to the recorded position. CSM doesn't accumulate dealt
-        # so we'd just reshuffle in place; skip the no-op burn.
+        # Burn forward to the recorded position within the current
+        # permutation. CSM doesn't accumulate dealt so we'd just
+        # reshuffle in place; skip the no-op burn.
         for _ in range(sess.cards_dealt):
             shoe.next_card()
     return shoe
@@ -297,6 +306,7 @@ def shoe_from_session(sess: GameSession) -> Shoe:
 def reset_shoe(sess: GameSession, *, new_seed: Optional[int] = None) -> None:
     """Keep bankroll + stats; fresh shoe + counter."""
     sess.shoe_seed = new_seed if new_seed is not None else random.randint(0, 2**31 - 1)
+    sess.shoe_shuffles = 1
     sess.cards_dealt = 0
     sess.running_count = 0
     sess.counter_cards_seen = 0

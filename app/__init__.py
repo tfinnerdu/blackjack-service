@@ -82,16 +82,22 @@ def _configure_logging(app: Flask) -> None:
 
 
 def _register_routes(app: Flask) -> None:
+    from .routes.baccarat import bp as baccarat_bp
+    from .routes.craps import bp as craps_bp
     from .routes.games import bp as games_bp
     from .routes.health import bp as health_bp
     from .routes.poker import bp as poker_bp
+    from .routes.roulette import bp as roulette_bp
     from .routes.sessions import bp as sessions_bp
     from .routes.strategy import bp as strategy_bp
     from .routes.templates import bp as templates_bp
 
+    app.register_blueprint(baccarat_bp)
+    app.register_blueprint(craps_bp)
     app.register_blueprint(games_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(poker_bp)
+    app.register_blueprint(roulette_bp)
     app.register_blueprint(sessions_bp)
     app.register_blueprint(strategy_bp)
     app.register_blueprint(templates_bp)

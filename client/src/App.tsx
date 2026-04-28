@@ -1,11 +1,14 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
+import Baccarat from "./pages/Baccarat";
+import Craps from "./pages/Craps";
 import Home from "./pages/Home";
 import JoinRoom from "./pages/JoinRoom";
 import Play from "./pages/Play";
 import Poker from "./pages/Poker";
 import PokerSetup from "./pages/PokerSetup";
 import PokerTable from "./pages/PokerTable";
+import Roulette from "./pages/Roulette";
 import Setup from "./pages/Setup";
 import Stats from "./pages/Stats";
 
@@ -22,6 +25,9 @@ export default function App() {
         <Route path="/poker" element={<Poker />} />
         <Route path="/poker/sim/setup" element={<PokerSetup />} />
         <Route path="/poker/sim/table" element={<PokerTable />} />
+        <Route path="/roulette" element={<Roulette />} />
+        <Route path="/baccarat" element={<Baccarat />} />
+        <Route path="/craps" element={<Craps />} />
       </Routes>
     </BrowserRouter>
   );

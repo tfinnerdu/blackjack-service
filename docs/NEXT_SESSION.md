@@ -7,7 +7,7 @@ session that landed the punch-list. Read this first, then `git log
 ## Current state
 
 - **Branch:** `main` is the only working branch. Pushes redeploy Render.
-- **Tests:** 428 backend pytest, frontend typecheck + build clean.
+- **Tests:** 496 backend pytest, frontend typecheck + build clean.
 - **Render:** live at the user's blackjack-service URL. gthread workers,
   Postgres free tier. Health = `/health`.
 - **Local dev ports:** Flask `5050`, Vite `5174` (project-specific
@@ -141,7 +141,55 @@ Open knobs the user might want next:
 - WebSockets / SSE for sub-second multi-player updates instead of the
   4-second poll.
 
-### 7. Lower-priority parking lot — three of four landed earlier
+### 7. ✅ Casino expansion + fairness fixes — landed
+
+Three new game families and a critical shoe-replay bug fix:
+
+- **Roulette** (`app/roulette/`, `app/services/roulette.py`,
+  `app/routes/roulette.py`, `client/src/pages/Roulette.tsx`).
+  American + European wheels, full bet table (straight / split /
+  street / corner / six-line / dozen / column / red-black / even-odd /
+  low-high). 17 engine tests including an empirical 5.26% house-edge
+  convergence over 10k spins.
+- **Baccarat** (`app/baccarat/`, `app/services/baccarat.py`,
+  `app/routes/baccarat.py`, `client/src/pages/Baccarat.tsx`). Punto
+  Banco rules with the standard third-card draw table. 16 tests
+  including the published 45.86% / 44.62% / 9.52% outcome
+  distribution.
+- **Craps** (`app/craps/`, `app/services/craps.py`,
+  `app/routes/craps.py`, `client/src/pages/Craps.tsx`). Pass /
+  Don't Pass + odds + Come / Don't Come + Place + Field + Any-7 /
+  Any-Craps + Hardways. 22 tests; pass-line win rate empirically
+  matches the 49.29% theoretical figure.
+- **Shared `CasinoSession` model**: one row per session, with
+  `game_type` discriminator, `state_json` for game-specific state,
+  `room_code` for guest invites. Lives in `app/casino/`.
+
+Plus the fairness fixes the user surfaced this session:
+
+- **Shoe-replay bug** — *the* big one. Sessions persisted shoe state as
+  `(seed, cards_dealt)` only, so any rebuild *after the first
+  reshuffle* rewound the shoe to the initial permutation. Players
+  reported "the same hands repeating after a reshuffle." Fixed by
+  adding a `shoe_shuffles` counter (incremented when the engine
+  reshuffles) and applying that many shuffles to a fresh shoe before
+  burning forward. Same fix replicated in the parallel-replay path
+  (book/counter bankrolls), the active-round reload path, and
+  Baccarat's shoe rebuild. Regression test in
+  `tests/test_shoe_persistence.py`.
+- **Cut-card jitter** — `Shoe.shuffle()` now picks the cut-card
+  position uniformly in `[penetration ± 4%]` so successive shoes
+  don't reshuffle at the same physical spot. CSM / hand-shuffle modes
+  unaffected.
+- **Cut-card / decks display** — Play page header shows `6D` and
+  `X to cut` so the player can see how close to a reshuffle they are.
+
+Tests: 496 backend pytest passing (was 428). Frontend typecheck +
+build clean. The fairness audit (now 9 tests) covers multi-seed,
+single-deck, book-play, rank uniformity, deal order, counter math,
+and per-up-card dealer bust rates.
+
+### 8. Lower-priority parking lot — three of four landed earlier
 
 - **✅ Stud bring-in mechanics**: 3rd-street lowest up-card brings in
   (highest in Razz), suit tie-break C < D < H < S. 4th-street onward

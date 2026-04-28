@@ -33,7 +33,10 @@ def test_rank_distribution_after_full_shoe():
 
 def test_cut_card_triggers_reshuffle_signal():
     shoe = Shoe(decks=6, seed=7, mode=ShuffleMode.CASINO, penetration=0.5)
-    shoe.deal(int(6 * 52 * 0.5) - 1)
+    # The cut-card jitter randomizes the cut around `penetration`,
+    # so use the shoe's actual cut index rather than a pre-computed one.
+    cut = shoe._cut_card_index
+    shoe.deal(cut - 1)
     assert not shoe.needs_reshuffle
     shoe.deal(2)
     assert shoe.needs_reshuffle
