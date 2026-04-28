@@ -141,7 +141,12 @@ def legal_actions(
     if needs_to_call == 0:
         actions.append(BetAction.CHECK)
         if player.stack > 0:
-            actions.append(BetAction.BET)
+            # If there's a current bet (blinds posted, BB option), increasing
+            # it is a RAISE; if there's no bet at all, it's a BET.
+            if current_bet > 0:
+                actions.append(BetAction.RAISE)
+            else:
+                actions.append(BetAction.BET)
     else:
         # Call or raise (if they can afford a min-raise).
         if player.stack > 0:

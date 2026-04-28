@@ -16,7 +16,7 @@ unsubstituted is rejected (callers must resolve wilds first).
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Iterable, Optional
 
@@ -67,10 +67,16 @@ def rank_high(rank: str) -> int:
 @dataclass(frozen=True)
 class HandRank:
     """Comparable hand strength. The tuple ordering mimics standard poker
-    comparison: class first, then class-specific tie-breakers."""
+    comparison: class first, then class-specific tie-breakers.
+
+    `cards` is descriptive only — two seats holding the same strength
+    via different physical cards (e.g. both playing the board straight)
+    must compare equal so split pots resolve correctly. We mark cards
+    compare=False so dataclass equality + ordering ignore it.
+    """
     cls: HandClass
     tiebreakers: tuple[int, ...]
-    cards: tuple[Card, ...]   # the 5 cards that produced this rank
+    cards: tuple[Card, ...] = field(default=(), compare=False)
 
     def __lt__(self, other: "HandRank") -> bool:
         return (self.cls, self.tiebreakers) < (other.cls, other.tiebreakers)
