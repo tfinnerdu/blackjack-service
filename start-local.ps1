@@ -53,9 +53,18 @@ $LanIp = (Get-NetIPAddress -AddressFamily IPv4 |
 
 if ($env:FLASK_DEBUG) { } else { $env:FLASK_DEBUG = "1" }
 
+# Computer name lets other devices on the LAN reach this box by
+# hostname instead of IP (Doane standard: prefer COMPUTERNAME-based URLs
+# over raw localhost / IP for shared dev / device testing).
+$Host = $env:COMPUTERNAME
+
 Write-Host "---"
 Write-Host "Flask:  http://localhost:5050"
-if (-not $BackendOnly) { Write-Host "Vite:   http://localhost:5174 (use this for dev)" }
+if ($Host) { Write-Host "        http://${Host}:5050" }
+if (-not $BackendOnly) {
+    Write-Host "Vite:   http://localhost:5174 (use this for dev)"
+    if ($Host) { Write-Host "        http://${Host}:5174" }
+}
 if ($LanIp) { Write-Host "LAN:    http://${LanIp}:5174" }
 Write-Host "Logs:   $Log"
 Write-Host "---"

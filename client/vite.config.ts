@@ -11,6 +11,9 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    // host=true binds to 0.0.0.0 so other machines on the LAN can reach
+    // the dev server by COMPUTERNAME or LAN IP, not just localhost.
+    host: true,
     port: 5174,
     proxy: {
       "/api": "http://127.0.0.1:5050",

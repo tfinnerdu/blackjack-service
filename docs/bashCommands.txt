@@ -17,6 +17,12 @@ Day-to-day local dev
   -> Flask on :5050  (API + serves built React after `npm run build`)
   -> Vite  on :5174  (use this URL for live dev; proxies /api to Flask)
 
+  Both servers bind to all interfaces, so reach them from another
+  device on the LAN via the Windows hostname:
+    http://<COMPUTERNAME>:5050  (Flask)
+    http://<COMPUTERNAME>:5174  (Vite)
+  start-local.ps1 prints the resolved $env:COMPUTERNAME URLs at boot.
+
   Backend only:
   .\start-local.ps1 -BackendOnly
 
