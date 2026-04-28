@@ -64,7 +64,7 @@ Write-Host "---"
 $flaskJob = Start-Job -ScriptBlock {
     param($root, $py, $log)
     Set-Location $root
-    & $py -u app.py *> $log 2>&1
+    & $py -u wsgi.py *> $log 2>&1
 } -ArgumentList $ProjectRoot, $VenvPython, $Log
 
 if ($BackendOnly) {
