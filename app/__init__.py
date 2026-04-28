@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from flask import Flask, jsonify, send_from_directory
+from flask_migrate import Migrate
 from dotenv import load_dotenv
 
 from .config import Config
@@ -17,6 +18,11 @@ VERSION = "0.1.0"
 
 # app/static/ holds the built React bundle (vite build output).
 STATIC_DIR = Path(__file__).parent / "static"
+
+# Flask-Migrate instance — registered with the app inside create_app so
+# `flask db <cmd>` finds it. The migrations/ directory at the project
+# root holds the alembic env + versioned scripts.
+migrate = Migrate()
 
 
 def create_app(config: Config | None = None) -> Flask:
@@ -32,12 +38,29 @@ def create_app(config: Config | None = None) -> Flask:
     _configure_logging(app)
     db.init_app(app)
 
+    # MIGRATING=1 tells create_app to skip the runtime bootstrap
+    # (db.create_all + seed_builtin_presets) so `flask db migrate` can
+    # autogenerate against a clean schema. Production / dev / test runs
+    # leave it unset and bootstrap normally.
+    skip_bootstrap = os.environ.get("MIGRATING") == "1"
+
     with app.app_context():
-        # Models register on import. create_all is idempotent and good enough
-        # for v0 — alembic migrations land when persistence gets real (phase 6).
-        from . import models
-        db.create_all()
-        models.seed_builtin_presets()
+        # Models register on import. We let alembic handle schema in
+        # production (`flask db upgrade` in the build step). Locally —
+        # and as a safety net for fresh DBs that haven't been migrated
+        # yet — db.create_all() + _ensure_columns() still bootstrap
+        # everything. Both paths converge on the same final schema; the
+        # alembic version table is created by the first `flask db
+        # upgrade` if it isn't already present.
+        from . import models  # noqa: F401  registers SQLAlchemy models
+        if not skip_bootstrap:
+            db.create_all()
+            models.seed_builtin_presets()
+
+    # Register flask-migrate with our models package as the metadata
+    # source. This is what makes `flask db migrate` autogenerate
+    # migrations from model changes going forward.
+    migrate.init_app(app, db, directory=str(Path(__file__).parent.parent / "migrations"))
 
     _register_routes(app)
     _register_spa_fallback(app)

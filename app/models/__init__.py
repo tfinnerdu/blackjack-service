@@ -256,20 +256,23 @@ class PokerSession(db.Model):
 
 
 def _ensure_columns() -> None:
-    """Idempotent boot migrations.
+    """Idempotent boot migrations — a safety net for non-alembic DBs.
 
-    Why not alembic? For this project (single user, non-precious data,
-    infrequent schema changes) the operational overhead of alembic
-    (migration timing on Render, rollback story, separate
-    flask-migrate dependency) outweighs the benefit. Adding new
-    columns here is a one-liner. Switch to alembic when:
-      - Schema changes pick up cadence (multiple per week)
-      - Production data needs guaranteed-reversible migrations
-      - We add a second persistent service that shares state
+    Alembic / Flask-Migrate now owns the production migration story
+    (see docs/MIGRATIONS.md). This shim still runs at boot for two
+    cases:
+      1. Local SQLite dev DBs that haven't been migrated.
+      2. The existing Render Postgres deployment until it gets stamped
+         (`flask db stamp head`) + the build's `flask db upgrade` is
+         uncommented.
+
+    Once both are migrated, this function can be deleted and
+    create_app's call to it removed. Until then it's defensive code
+    that's idempotent — `ALTER TABLE ... ADD COLUMN` is a no-op when
+    the column already exists in our check.
 
     Each block: check if a known table exists, check if the new column
-    exists, ALTER if missing. Safe to call repeatedly. Designed for
-    SQLite dev + Postgres prod (Render).
+    exists, ALTER if missing. Designed for SQLite + Postgres.
     """
     from sqlalchemy import inspect, text
 
