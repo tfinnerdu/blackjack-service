@@ -73,18 +73,18 @@ export default function Home() {
 
           <ModeCard
             title="Poker"
-            blurb="Variant-aware helper + simulator. Hi/lo splits explained. Wild rule builder."
+            blurb="Companion: pick a variant, enter your cards, see your best high + low + the hi/lo split rule explained."
             primary={
               <Link
                 to="/poker"
                 className="block w-full min-h-touch flex items-center justify-center rounded-xl bg-white text-felt-dark font-semibold"
               >
-                Open poker
+                Open companion
               </Link>
             }
             secondary={
               <div className="text-xs text-white/40 text-center">
-                Phase 1: foundations. Variant library + companion ship in phase 3.
+                16 variants live including the home-game 53-card joker rule. Simulator + AI come next.
               </div>
             }
           />
