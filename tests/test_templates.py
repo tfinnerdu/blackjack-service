@@ -74,3 +74,36 @@ def test_cannot_delete_builtin():
     builtin = next(t for t in r.get_json()["templates"] if t["is_builtin"])
     r2 = client.delete(f"/api/v1/templates/{builtin['id']}")
     assert r2.status_code == 403
+
+
+def test_seeded_templates_carry_game_type_blackjack():
+    _, client = _client()
+    r = client.get("/api/v1/templates")
+    for t in r.get_json()["templates"]:
+        assert t["game_type"] == "blackjack"
+
+
+def test_game_type_filter_excludes_other_games():
+    _, client = _client()
+    r = client.get("/api/v1/templates?game_type=poker")
+    assert r.get_json()["templates"] == []
+    r = client.get("/api/v1/templates?game_type=blackjack")
+    assert len(r.get_json()["templates"]) >= 4
+
+
+def test_create_template_with_explicit_game_type():
+    _, client = _client()
+    body = {
+        "game_type": "poker",
+        "name": "Anaconda Pass-the-Trash",
+        "description": "Test variant",
+        "rules": {"variant": "anaconda"},
+        "side_bets": {},
+    }
+    r = client.post(
+        "/api/v1/templates",
+        data=json.dumps(body),
+        content_type="application/json",
+    )
+    assert r.status_code == 201
+    assert r.get_json()["game_type"] == "poker"

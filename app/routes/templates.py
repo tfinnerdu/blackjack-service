@@ -25,7 +25,11 @@ def _err(message: str, code: str, status: int = 400):
 
 @bp.get("")
 def list_templates():
-    templates = SettingsTemplate.query.order_by(
+    game_type = request.args.get("game_type")
+    q = SettingsTemplate.query
+    if game_type:
+        q = q.filter_by(game_type=game_type)
+    templates = q.order_by(
         SettingsTemplate.is_builtin.desc(),
         SettingsTemplate.name.asc(),
     ).all()
@@ -45,6 +49,7 @@ def create_template():
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
     description = (data.get("description") or "").strip()
+    game_type = (data.get("game_type") or "blackjack").strip()
     rules = data.get("rules")
     side_bets = data.get("side_bets")
     if not name or rules is None or side_bets is None:
@@ -52,6 +57,7 @@ def create_template():
     if SettingsTemplate.query.filter_by(name=name).first():
         return _err("template name already exists", "DUPLICATE")
     t = SettingsTemplate(
+        game_type=game_type,
         name=name,
         description=description,
         rules_json=json.dumps(rules),

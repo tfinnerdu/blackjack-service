@@ -23,8 +23,9 @@ def _new_token() -> str:
 
 
 class SettingsTemplate(db.Model):
-    """A named Rules + SideBets snapshot the user can apply to a new session.
+    """A named rules + side-bets snapshot the user can apply to a new session.
 
+    `game_type` discriminates between game families ('blackjack', 'poker', ...).
     Built-in presets are seeded with `is_builtin=True` and are read-only in
     the UI (clone-to-edit). User-created templates are editable.
     """
@@ -32,6 +33,7 @@ class SettingsTemplate(db.Model):
     __tablename__ = "settings_template"
 
     id = db.Column(db.Integer, primary_key=True)
+    game_type = db.Column(db.String(32), nullable=False, default="blackjack", index=True)
     name = db.Column(db.String(120), nullable=False, unique=True)
     description = db.Column(db.String(500), nullable=False, default="")
     rules_json = db.Column(db.Text, nullable=False)
@@ -54,6 +56,7 @@ class SettingsTemplate(db.Model):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "game_type": self.game_type,
             "name": self.name,
             "description": self.description,
             "rules": self.rules(),
@@ -71,8 +74,10 @@ class SettingsTemplate(db.Model):
         rules,
         side_bets,
         is_builtin: bool = False,
+        game_type: str = "blackjack",
     ) -> "SettingsTemplate":
         return cls(
+            game_type=game_type,
             name=name,
             description=description,
             rules_json=json.dumps(rules.to_dict()),
@@ -192,9 +197,31 @@ class GameSession(db.Model):
         }
 
 
+def _ensure_columns() -> None:
+    """Idempotent boot migrations. Add columns that older deployments are
+    missing. We're not running alembic yet, so this stays inline."""
+    from sqlalchemy import inspect, text
+
+    insp = inspect(db.engine)
+    if "settings_template" not in insp.get_table_names():
+        return  # create_all will handle it
+
+    cols = {c["name"] for c in insp.get_columns("settings_template")}
+    if "game_type" not in cols:
+        with db.engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE settings_template "
+                    "ADD COLUMN game_type VARCHAR(32) NOT NULL DEFAULT 'blackjack'"
+                )
+            )
+
+
 def seed_builtin_presets() -> None:
     """Insert canonical presets if they're missing. Safe to call repeatedly."""
     from ..engine.presets import all_presets
+
+    _ensure_columns()
 
     existing = {t.name for t in SettingsTemplate.query.filter_by(is_builtin=True).all()}
     added = False
@@ -208,6 +235,7 @@ def seed_builtin_presets() -> None:
                 rules=rules,
                 side_bets=side_bets,
                 is_builtin=True,
+                game_type="blackjack",
             )
         )
         added = True
