@@ -96,6 +96,42 @@ def _persist_ai_seats(sess: GameSession, ai: dict[int, AISeat]) -> None:
     sess.ai_seats_json = json.dumps(rows)
 
 
+# Heuristic EV-loss table when the human deviates from book. Values are
+# fractions of the hand's main bet, returned in cents to avoid float
+# accumulation in the running session counter. NOT a true Monte Carlo EV
+# calculation — these are coarse magnitudes that give directional
+# feedback ('mistakes are costing you ~$50 over this session') without
+# the per-action sim cost. UI labels this an estimate.
+_EV_LOSS_FRACTION: dict[tuple[str, str], float] = {
+    # (player_did, book_said) -> fraction of bet lost
+    ("hit", "stand"): 0.30,         # busts or worsens a made hand
+    ("stand", "hit"): 0.25,         # gives up easy improvement
+    ("hit", "double"): 0.30,        # missed the double bonus on top of suboptimal play
+    ("stand", "double"): 0.30,      # missed the double bonus
+    ("double", "hit"): 0.25,        # over-committed; might have hit anyway
+    ("double", "stand"): 0.50,      # double on a bad spot
+    ("split", "hit"): 0.30,
+    ("split", "stand"): 0.40,
+    ("hit", "split"): 0.20,
+    ("stand", "split"): 0.20,
+    ("surrender", "hit"): 0.25,     # took half-loss vs likely positive EV
+    ("surrender", "stand"): 0.40,   # took half-loss on a stand spot
+    ("surrender", "double"): 0.50,
+    ("hit", "surrender"): 0.25,
+    ("stand", "surrender"): 0.25,
+    ("double", "surrender"): 0.50,
+    ("split", "surrender"): 0.30,
+}
+
+
+def _ev_loss_cents(player_action: str, book_action: str, bet_dollars: int) -> int:
+    """Heuristic dollar EV lost on this single action. Returned in cents."""
+    if player_action == book_action:
+        return 0
+    fraction = _EV_LOSS_FRACTION.get((player_action, book_action), 0.20)
+    return int(round(bet_dollars * fraction * 100))
+
+
 def _capabilities_from_legal(legal: list[Action]) -> Capabilities:
     return Capabilities(
         can_double="double" in legal,
@@ -562,13 +598,15 @@ def take_action(sess: GameSession, action: Action) -> RoundView:
         raise GameError(f"illegal action; legal: {legal}")
 
     # Bookkeeping: record book vs actual for the hand BEFORE we mutate it.
-    # A "mistake" is any time the human's action differs from the book.
+    # A "mistake" is any time the human's action differs from the book;
+    # we also accrue a heuristic dollar EV-lost against the player's bet.
     hand = rnd.active_hand
     if hand is not None:
         caps = _capabilities_from_legal(legal)
         recommended = book(hand, rnd.dealer.cards[0], rules, caps, true_count=true_count_now).action
         if action != recommended:
             sess.book_mistakes += 1
+            sess.ev_lost_cents += _ev_loss_cents(action, recommended, hand.bet)
 
     # Doubling consumes an extra unit of bankroll (the original main_bet
     # amount). Splitting also requires another unit. Both are pre-checked

@@ -54,10 +54,39 @@ export interface CreateSessionBody {
   seed?: number;
 }
 
+export interface SessionStatsView {
+  hands_played: number;
+  starting_bankroll: number;
+  bankroll: number;
+  net_profit: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  player_blackjacks: number;
+  busts: number;
+  surrenders: number;
+  book_mistakes: number;
+  ev_lost_dollars: number;
+  ev_lost_estimate_note: string;
+  rates: {
+    win_pct: number;
+    loss_pct: number;
+    push_pct: number;
+    mistake_pct: number;
+    blackjack_pct: number;
+    bust_pct: number;
+  };
+  counter: {
+    running_count: number;
+    cards_seen: number;
+  };
+}
+
 export const Sessions = {
   create: (body: CreateSessionBody) =>
     http<SessionView>("POST", "/api/v1/sessions", body),
   me: () => http<SessionView>("GET", "/api/v1/sessions/me"),
+  stats: () => http<SessionStatsView>("GET", "/api/v1/sessions/me/stats"),
   reset: (seed?: number) =>
     http<SessionView>("POST", "/api/v1/sessions/me/reset", { seed }),
   destroy: () => http<{ deleted: boolean }>("DELETE", "/api/v1/sessions/me"),

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { ApiError, Sessions } from "../lib/api";
+import { ApiError, SessionStatsView, Sessions } from "../lib/api";
 import { useApp } from "../lib/store";
 
 export default function Stats() {
@@ -9,6 +9,7 @@ export default function Stats() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<SessionStatsView | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -20,6 +21,20 @@ export default function Stats() {
         });
     }
   }, [session, setSession, navigate]);
+
+  // Always re-pull derived stats; the cached session view in the store
+  // doesn't include EV-lost / win-rate.
+  useEffect(() => {
+    Sessions.stats()
+      .then(setStats)
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 404) {
+          // Will be handled by the session redirect above.
+        } else {
+          setError(String(e));
+        }
+      });
+  }, [session?.stats.hands_played]);
 
   if (!session) {
     return (
@@ -87,39 +102,47 @@ export default function Stats() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Stat label="Hands played" value={String(session.stats.hands_played)} />
+          <Stat label="Hands played" value={String(stats?.hands_played ?? session.stats.hands_played)} />
           <Stat
             label="Win rate"
-            value={
-              session.stats.hands_played
-                ? `${Math.round((session.stats.wins / session.stats.hands_played) * 100)}%`
-                : "—"
+            value={stats ? `${stats.rates.win_pct}%` : "—"}
+            sub={
+              stats
+                ? `${stats.wins}W / ${stats.losses}L / ${stats.pushes}P`
+                : undefined
             }
-            sub={`${session.stats.wins}W / ${session.stats.losses}L / ${session.stats.pushes}P`}
           />
           <Stat
             label="Book mistakes"
-            value={String(session.stats.book_mistakes)}
-            sub={
-              session.stats.hands_played
-                ? `${Math.round(
-                    (session.stats.book_mistakes / session.stats.hands_played) * 100,
-                  )}% of hands`
-                : "—"
-            }
+            value={String(stats?.book_mistakes ?? session.stats.book_mistakes)}
+            sub={stats ? `${stats.rates.mistake_pct}% of hands` : undefined}
+          />
+          <Stat
+            label="EV lost (est.)"
+            value={stats ? `$${stats.ev_lost_dollars.toFixed(2)}` : "—"}
+            sub="heuristic"
           />
           <Stat
             label="Player blackjacks"
-            value={String(session.stats.player_blackjacks)}
+            value={String(stats?.player_blackjacks ?? session.stats.player_blackjacks)}
           />
-          <Stat label="Busts" value={String(session.stats.busts)} />
-          <Stat label="Surrenders" value={String(session.stats.surrenders)} />
+          <Stat label="Busts" value={String(stats?.busts ?? session.stats.busts)} />
+          <Stat label="Surrenders" value={String(stats?.surrenders ?? session.stats.surrenders)} />
           <Stat label="Cards seen" value={String(session.counter.cards_seen)} />
           <Stat
             label="Running count"
             value={String(session.counter.running_count)}
           />
         </div>
+
+        {stats && stats.ev_lost_dollars > 0 && (
+          <div className="text-xs text-white/50">
+            EV-lost is a heuristic estimate based on your action vs the book —
+            not a true Monte Carlo expected-value calculation. Use it for
+            direction (mistakes are costing you ~${stats.ev_lost_dollars.toFixed(0)}),
+            not absolute accuracy.
+          </div>
+        )}
 
         <div className="rounded-xl bg-felt p-3 text-xs space-y-1">
           <div className="flex justify-between">

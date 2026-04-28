@@ -136,6 +136,11 @@ class GameSession(db.Model):
     book_profit = db.Column(db.Integer, nullable=False, default=0)
     actual_profit = db.Column(db.Integer, nullable=False, default=0)
     book_mistakes = db.Column(db.Integer, nullable=False, default=0)
+    # Heuristic EV-lost-to-mistakes (cents to avoid float). Each time the
+    # human's action diverges from book, an action-specific fraction of
+    # the bet is added here. Approximation, not a Monte Carlo EV — useful
+    # for direction, not absolute accuracy.
+    ev_lost_cents = db.Column(db.Integer, nullable=False, default=0)
     # Per-result counters (player perspective, all hands across splits).
     wins = db.Column(db.Integer, nullable=False, default=0)
     losses = db.Column(db.Integer, nullable=False, default=0)
@@ -182,6 +187,7 @@ class GameSession(db.Model):
                 "actual_profit": self.actual_profit,
                 "book_profit": self.book_profit,
                 "book_mistakes": self.book_mistakes,
+                "ev_lost_cents": self.ev_lost_cents,
                 "wins": self.wins,
                 "losses": self.losses,
                 "pushes": self.pushes,
@@ -251,22 +257,34 @@ class PokerSession(db.Model):
 
 def _ensure_columns() -> None:
     """Idempotent boot migrations. Add columns that older deployments are
-    missing. We're not running alembic yet, so this stays inline."""
+    missing. We're not running alembic yet, so this stays inline.
+
+    Each block: check if a known table exists, check if the new column
+    exists, ALTER if missing. Safe to call repeatedly. Designed for
+    SQLite dev + Postgres prod (Render).
+    """
     from sqlalchemy import inspect, text
 
     insp = inspect(db.engine)
-    if "settings_template" not in insp.get_table_names():
-        return  # create_all will handle it
+    table_names = set(insp.get_table_names())
 
-    cols = {c["name"] for c in insp.get_columns("settings_template")}
-    if "game_type" not in cols:
+    def _add(table: str, column: str, ddl: str) -> None:
+        if table not in table_names:
+            return
+        cols = {c["name"] for c in insp.get_columns(table)}
+        if column in cols:
+            return
         with db.engine.begin() as conn:
-            conn.execute(
-                text(
-                    "ALTER TABLE settings_template "
-                    "ADD COLUMN game_type VARCHAR(32) NOT NULL DEFAULT 'blackjack'"
-                )
-            )
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+
+    _add("settings_template", "game_type", "VARCHAR(32) NOT NULL DEFAULT 'blackjack'")
+    _add("game_session", "ev_lost_cents", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "wins", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "losses", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "pushes", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "player_blackjacks", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "busts", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "surrenders", "INTEGER NOT NULL DEFAULT 0")
 
 
 def seed_builtin_presets() -> None:
