@@ -22,8 +22,10 @@ from ..services.poker_games import (
     active_hand_view,
     create_session,
     get_current_session,
+    session_stats,
     start_hand,
     take_action,
+    take_discard,
 )
 
 bp = Blueprint("poker", __name__, url_prefix="/api/v1/poker")
@@ -222,6 +224,14 @@ def active_hand_endpoint():
     return jsonify(view)
 
 
+@bp.get("/sessions/me/stats")
+def session_stats_endpoint():
+    sess = get_current_session()
+    if not sess:
+        return _err("no active poker session", "NO_SESSION", 404)
+    return jsonify(session_stats(sess))
+
+
 @bp.post("/sessions/me/hands/active/action")
 def hand_action_endpoint():
     sess = get_current_session()
@@ -238,6 +248,25 @@ def hand_action_endpoint():
         return _err("amount must be int or null", "BAD_REQUEST")
     try:
         view = take_action(sess, action, amount)
+    except GameError as e:
+        return _err(str(e), "GAME_ERROR", 409)
+    return jsonify(view)
+
+
+@bp.post("/sessions/me/hands/active/discard")
+def hand_discard_endpoint():
+    """Draw poker only: human picks card indices to discard. Body:
+      { "indices": [0, 2] }   # 0-indexed against the player's 5 hole cards
+    """
+    sess = get_current_session()
+    if not sess:
+        return _err("no active poker session", "NO_SESSION", 404)
+    body = request.get_json() or {}
+    indices = body.get("indices")
+    if not isinstance(indices, list) or not all(isinstance(i, int) for i in indices):
+        return _err("indices must be a list of ints", "BAD_REQUEST")
+    try:
+        view = take_discard(sess, indices)
     except GameError as e:
         return _err(str(e), "GAME_ERROR", 409)
     return jsonify(view)

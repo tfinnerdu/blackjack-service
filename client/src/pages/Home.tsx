@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError, Sessions } from "../lib/api";
+import { useInstallPrompt } from "../lib/install";
 import { useApp } from "../lib/store";
 
 export default function Home() {
@@ -9,6 +10,8 @@ export default function Home() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [hasSession, setHasSession] = useState(false);
+  const install = useInstallPrompt();
+  const [iosHintShown, setIosHintShown] = useState(false);
 
   useEffect(() => {
     Sessions.me()
@@ -91,9 +94,87 @@ export default function Home() {
               </Link>
             }
           />
+
+          <div className="rounded-xl bg-felt p-4 text-left space-y-3">
+            <div>
+              <div className="text-lg font-semibold">More casino games</div>
+              <div className="text-xs text-white/60">
+                One bankroll per game, rooms shareable like blackjack.
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Link
+                to="/roulette"
+                className="min-h-touch rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center text-sm"
+              >
+                Roulette
+              </Link>
+              <Link
+                to="/baccarat"
+                className="min-h-touch rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center text-sm"
+              >
+                Baccarat
+              </Link>
+              <Link
+                to="/craps"
+                className="min-h-touch rounded-xl bg-white/10 hover:bg-white/15 flex items-center justify-center text-sm"
+              >
+                Craps
+              </Link>
+            </div>
+          </div>
+
+          <ModeCard
+            title="Sports betting simulator"
+            blurb="Paper-trade single bets and parlays against a daily NBA/NFL/MLB/NHL slate. Hit 'advance day' to settle and see how your strategy actually played out."
+            primary={
+              <Link
+                to="/sportsbook"
+                className="block w-full min-h-touch flex items-center justify-center rounded-xl bg-white text-felt-dark font-semibold"
+              >
+                Open the book
+              </Link>
+            }
+            secondary={null}
+          />
         </div>
 
+        <Link
+          to="/join"
+          className="block text-xs text-white/60 underline"
+        >
+          Join a friend's room with a code →
+        </Link>
+
         {loading && <div className="text-white/40 text-xs">checking session…</div>}
+
+        {!install.installed && (install.available || install.isIOS) && (
+          <div className="text-center">
+            {install.available && (
+              <button
+                onClick={() => install.trigger()}
+                className="text-xs text-white/60 underline"
+              >
+                Install to home screen
+              </button>
+            )}
+            {install.isIOS && !install.available && !iosHintShown && (
+              <button
+                onClick={() => setIosHintShown(true)}
+                className="text-xs text-white/60 underline"
+              >
+                Install on iPhone?
+              </button>
+            )}
+            {iosHintShown && (
+              <div className="text-xs text-white/50 mt-1 max-w-[18rem] mx-auto">
+                Tap Share <span aria-hidden>⤴</span> in Safari, then
+                <em> Add to Home Screen</em>. Launches full-screen with no
+                browser chrome.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

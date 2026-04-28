@@ -2,10 +2,13 @@
 
 POST   /api/v1/sessions             create a session (token in body + cookie)
 GET    /api/v1/sessions/me          fetch the session bound to caller's token
+GET    /api/v1/sessions/me/stats    derived stats: win rate, mistake rate,
+                                    EV-lost-to-mistakes
 POST   /api/v1/sessions/me/reset    keep bankroll + stats, reshuffle shoe
 DELETE /api/v1/sessions/me          end the current session
-GET    /api/v1/sessions             list all sessions on this token (future
-                                    multi-session support; phase 6 wires UI)
+GET    /api/v1/sessions/by-code/<code>                       lobby info
+POST   /api/v1/sessions/by-code/<code>/seats/<n>/claim       claim a bot seat
+POST   /api/v1/sessions/by-code/<code>/seats/<n>/release     drop a guest claim
 """
 from __future__ import annotations
 
@@ -16,10 +19,16 @@ from flask import Blueprint, jsonify, request
 from ..db import db
 from ..services.sessions import (
     COOKIE_NAME,
+    claim_seat,
     create_from_template,
     get_current_session,
+    get_seat_claim_bet,
+    get_session_by_room_code,
     get_session_token,
+    release_seat,
     reset_shoe,
+    resolve_seat_for_token,
+    set_seat_claim_bet,
 )
 
 bp = Blueprint("sessions", __name__, url_prefix="/api/v1/sessions")
@@ -67,10 +76,101 @@ def create():
 
 @bp.get("/me")
 def get_me():
+    # Either the host's token or a guest's seat token resolves here. We
+    # tag the response with `caller_seat` so the UI can render the
+    # right seat-specific affordances.
+    sess, seat_num = resolve_seat_for_token(get_session_token() or "")
+    if not sess:
+        return _err("no active session", "NO_SESSION", 404)
+    payload = sess.to_dict()
+    payload["caller_seat"] = seat_num
+    payload["caller_is_host"] = (seat_num == sess.player_seat)
+    # Caller's preferred next-round bet (None = will use the bot's base_bet).
+    payload["caller_seat_bet"] = (
+        get_seat_claim_bet(sess, seat_num)
+        if seat_num is not None and seat_num != sess.player_seat
+        else None
+    )
+    return jsonify(payload)
+
+
+@bp.post("/me/seat/bet")
+def set_caller_seat_bet():
+    """Caller updates their own claimed seat's bet for the next round.
+    Host's seat is set per-round via the round-start endpoint instead."""
+    sess, seat_num = resolve_seat_for_token(get_session_token() or "")
+    if not sess or seat_num is None:
+        return _err("no active session", "NO_SESSION", 404)
+    if seat_num == sess.player_seat:
+        return _err(
+            "host bets via the round-start endpoint, not seat bet",
+            "FORBIDDEN", 403,
+        )
+    body = request.get_json() or {}
+    bet = body.get("bet")
+    if not isinstance(bet, int) or bet <= 0:
+        return _err("bet must be int > 0", "BAD_REQUEST")
+    rules = json.loads(sess.rules_json)
+    if not (rules.get("min_bet", 1) <= bet <= rules.get("max_bet", 500)):
+        return _err(
+            f"bet {bet} outside table limits "
+            f"{rules.get('min_bet')}..{rules.get('max_bet')}",
+            "BAD_REQUEST",
+        )
+    try:
+        set_seat_claim_bet(sess, seat_num, bet)
+    except ValueError as e:
+        return _err(str(e), "BAD_REQUEST")
+    return jsonify(seat_num=seat_num, bet=bet)
+
+
+@bp.get("/me/stats")
+def stats_me():
+    """Derived blackjack stats. Computes ratios + EV-lost-as-dollars on
+    top of the raw counters in the session row so the UI can render them
+    directly."""
     sess = get_current_session()
     if not sess:
         return _err("no active session", "NO_SESSION", 404)
-    return jsonify(sess.to_dict())
+    hp = sess.hands_played or 0
+    win_rate = round(sess.wins / hp * 100, 1) if hp else 0.0
+    mistake_rate = round(sess.book_mistakes / hp * 100, 1) if hp else 0.0
+    bj_rate = round(sess.player_blackjacks / hp * 100, 1) if hp else 0.0
+    bust_rate = round(sess.busts / hp * 100, 1) if hp else 0.0
+    return jsonify(
+        hands_played=hp,
+        starting_bankroll=sess.starting_bankroll,
+        bankroll=sess.bankroll,
+        net_profit=sess.bankroll - sess.starting_bankroll,
+        wins=sess.wins,
+        losses=sess.losses,
+        pushes=sess.pushes,
+        player_blackjacks=sess.player_blackjacks,
+        busts=sess.busts,
+        surrenders=sess.surrenders,
+        book_mistakes=sess.book_mistakes,
+        ev_lost_dollars=round(sess.ev_lost_cents / 100, 2),
+        ev_lost_estimate_note="Heuristic estimate, not a true Monte Carlo EV.",
+        rates={
+            "win_pct": win_rate,
+            "loss_pct": round(sess.losses / hp * 100, 1) if hp else 0.0,
+            "push_pct": round(sess.pushes / hp * 100, 1) if hp else 0.0,
+            "mistake_pct": mistake_rate,
+            "blackjack_pct": bj_rate,
+            "bust_pct": bust_rate,
+        },
+        counter={
+            "running_count": sess.running_count,
+            "cards_seen": sess.counter_cards_seen,
+        },
+        bankrolls={
+            "actual": sess.bankroll,
+            "book": sess.book_bankroll,
+            "counter": sess.counter_bankroll,
+            "starting": sess.starting_bankroll,
+        },
+        bankroll_history=json.loads(sess.bankroll_history_json or "[]"),
+    )
 
 
 @bp.post("/me/reset")
@@ -81,6 +181,85 @@ def reset_me():
     body = request.get_json() or {}
     reset_shoe(sess, new_seed=body.get("seed"))
     return jsonify(sess.to_dict())
+
+
+# ---- room code / seat-claim ------------------------------------------
+
+def _room_view(sess) -> dict:
+    """Public lobby view of a room — no host token, no shoe internals.
+    Anyone with the room code can fetch this to decide which seat to grab."""
+    from ..services.sessions import _claim_bet, _claim_token
+
+    rules = json.loads(sess.rules_json)
+    ai_rows = json.loads(sess.ai_seats_json)
+    claimed = json.loads(sess.seat_tokens_json or "{}")
+    seats = []
+    for n in range(1, int(rules.get("seats", 1)) + 1):
+        if n == sess.player_seat:
+            seats.append({"seat_num": n, "kind": "host", "claimable": False})
+            continue
+        ai = next((r for r in ai_rows if int(r["seat_num"]) == n), None)
+        claim_value = claimed.get(str(n))
+        is_claimed = _claim_token(claim_value) is not None
+        seats.append({
+            "seat_num": n,
+            "kind": "guest" if is_claimed else "ai",
+            "claimable": ai is not None and not is_claimed,
+            "playstyle": ai.get("playstyle") if ai else None,
+            "bet_pattern": ai.get("bet_pattern") if ai else None,
+            "base_bet": ai.get("base_bet") if ai else None,
+            "bankroll": ai.get("bankroll") if ai else None,
+            # Surface the guest's chosen bet (or null = "use bot base bet").
+            "guest_bet": _claim_bet(claim_value) if is_claimed else None,
+        })
+    return {
+        "room_code": sess.room_code,
+        "template_name": sess.template.name if sess.template else None,
+        "rules": rules,
+        "seats": seats,
+        "player_seat": sess.player_seat,
+        "hands_played": sess.hands_played,
+    }
+
+
+@bp.get("/by-code/<code>")
+def get_by_code(code: str):
+    sess = get_session_by_room_code(code)
+    if not sess:
+        return _err("no such room", "NO_ROOM", 404)
+    return jsonify(_room_view(sess))
+
+
+@bp.post("/by-code/<code>/seats/<int:seat_num>/claim")
+def claim_seat_route(code: str, seat_num: int):
+    sess = get_session_by_room_code(code)
+    if not sess:
+        return _err("no such room", "NO_ROOM", 404)
+    try:
+        token = claim_seat(sess, seat_num)
+    except ValueError as e:
+        return _err(str(e), "BAD_REQUEST", 400)
+    response = jsonify(token=token, seat_num=seat_num, room=_room_view(sess))
+    response.status_code = 201
+    return _attach_cookie(response, token)
+
+
+@bp.post("/by-code/<code>/seats/<int:seat_num>/release")
+def release_seat_route(code: str, seat_num: int):
+    from ..services.sessions import _claim_token
+
+    sess = get_session_by_room_code(code)
+    if not sess:
+        return _err("no such room", "NO_ROOM", 404)
+    # Only the seat owner (or host) can release.
+    caller = get_session_token() or ""
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    is_owner = _claim_token(seats.get(str(seat_num))) == caller
+    is_host = caller == sess.token
+    if not (is_owner or is_host):
+        return _err("not authorized to release this seat", "FORBIDDEN", 403)
+    release_seat(sess, seat_num)
+    return jsonify(_room_view(sess))
 
 
 @bp.delete("/me")

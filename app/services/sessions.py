@@ -3,11 +3,17 @@ and the snapshot/restore helpers the round API will use in phase 6.
 
 Auth is anonymous and cookie-based. The token also works as a URL query
 param so a session is shareable / installable as a PWA without a login flow.
+
+Each session also gets a short `room_code` that lets a guest claim an AI
+seat at the table. Guests have their own anonymous tokens stored in
+`seat_tokens_json`; `resolve_seat_for_token` returns (session, seat_num)
+so the round API can authorize per-seat actions for either host or guest.
 """
 from __future__ import annotations
 
 import json
 import random
+import secrets
 from dataclasses import asdict, fields, is_dataclass
 from typing import Any, Optional
 
@@ -27,6 +33,25 @@ from ..models import GameSession, SettingsTemplate
 
 COOKIE_NAME = Config.SESSION_COOKIE_NAME
 TOKEN_QUERY_PARAM = "session"
+# Crockford-style alphabet: no 0/O/1/I/L. Six chars = ~30 bits of
+# entropy, plenty for casual collision avoidance.
+_ROOM_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+
+
+def _new_room_code() -> str:
+    return "".join(secrets.choice(_ROOM_CODE_ALPHABET) for _ in range(6))
+
+
+def generate_unique_room_code(max_attempts: int = 8) -> str:
+    """Pick a code that no live session is currently using. We allow a
+    few retries because the alphabet is large enough that real
+    collisions are vanishingly rare."""
+    for _ in range(max_attempts):
+        code = _new_room_code()
+        if not GameSession.query.filter_by(room_code=code).first():
+            return code
+    # Astronomically unlikely; fall through with whatever we generated.
+    return _new_room_code()
 
 
 # ---- token plumbing ----------------------------------------------------
@@ -150,6 +175,9 @@ def create_from_template(
         side_bets_json=json.dumps(side_bets.to_dict()),
         starting_bankroll=bankroll,
         bankroll=bankroll,
+        book_bankroll=bankroll,
+        counter_bankroll=bankroll,
+        bankroll_history_json="[]",
         last_results_json="[]",
         shoe_seed=seed if seed is not None else random.randint(0, 2**31 - 1),
         cards_dealt=0,
@@ -157,10 +185,116 @@ def create_from_template(
         counter_cards_seen=0,
         player_seat=seat,
         ai_seats_json=json.dumps(ai_seats or _default_ai_seats(rules, seat)),
+        room_code=generate_unique_room_code(),
+        seat_tokens_json="{}",
     )
     db.session.add(sess)
     db.session.commit()
     return sess
+
+
+# ---- multi-seat token resolution -------------------------------------
+
+def get_session_by_room_code(code: str) -> Optional[GameSession]:
+    if not code:
+        return None
+    return GameSession.query.filter_by(room_code=code.upper()).first()
+
+
+def resolve_seat_for_token(token: str) -> tuple[Optional[GameSession], Optional[int]]:
+    """Map a token to its (session, seat_num).
+
+    Two paths:
+      1. Token == sess.token → host's seat (sess.player_seat).
+      2. Token appears in some session's seat_tokens_json → that guest seat.
+
+    Returns (None, None) if the token isn't bound to any session.
+    """
+    if not token:
+        return None, None
+    sess = GameSession.query.filter_by(token=token).first()
+    if sess is not None:
+        return sess, sess.player_seat
+    candidates = GameSession.query.filter(
+        GameSession.seat_tokens_json.like(f"%{token}%")
+    ).all()
+    for cand in candidates:
+        seats = json.loads(cand.seat_tokens_json or "{}")
+        for seat_num_str, value in seats.items():
+            if _claim_token(value) == token:
+                return cand, int(seat_num_str)
+    return None, None
+
+
+def claim_seat(sess: GameSession, seat_num: int) -> str:
+    """Attach a fresh guest token to `seat_num`, replacing any previous
+    claim. The seat must exist as an AI seat in the session config and
+    must not be the host's seat. Returns the new guest token."""
+    if seat_num == sess.player_seat:
+        raise ValueError("the host's seat is not claimable")
+    rules = rules_from_dict(json.loads(sess.rules_json))
+    if not 1 <= seat_num <= rules.seats:
+        raise ValueError(f"seat_num {seat_num} not in 1..{rules.seats}")
+    ai_rows = json.loads(sess.ai_seats_json)
+    if not any(int(r.get("seat_num", -1)) == seat_num for r in ai_rows):
+        raise ValueError(f"seat {seat_num} is not configured as a bot seat")
+
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    new_token = secrets.token_urlsafe(32)
+    # New shape: {token, bet} — `bet=None` means "use the bot's base_bet".
+    # Older sessions may have plain-string values; the helpers below
+    # handle both shapes transparently.
+    seats[str(seat_num)] = {"token": new_token, "bet": None}
+    sess.seat_tokens_json = json.dumps(seats)
+    db.session.commit()
+    return new_token
+
+
+def release_seat(sess: GameSession, seat_num: int) -> None:
+    """Drop a guest claim — the seat goes back to the AI playstyle."""
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    if str(seat_num) in seats:
+        del seats[str(seat_num)]
+        sess.seat_tokens_json = json.dumps(seats)
+        db.session.commit()
+
+
+# ---- seat-claim shape helpers ----------------------------------------
+# Older rows store {seat_num: "<token>"}; newer rows store
+# {seat_num: {"token": "<token>", "bet": <int or None>}}.
+
+def _claim_token(value) -> Optional[str]:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return value.get("token")
+    return None
+
+
+def _claim_bet(value) -> Optional[int]:
+    if isinstance(value, dict):
+        b = value.get("bet")
+        return int(b) if b is not None else None
+    return None
+
+
+def get_seat_claim_bet(sess: GameSession, seat_num: int) -> Optional[int]:
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    return _claim_bet(seats.get(str(seat_num)))
+
+
+def set_seat_claim_bet(sess: GameSession, seat_num: int, bet: int) -> None:
+    """Update a claimed seat's preferred bet for the next round.
+    Raises ValueError if the seat isn't claimed."""
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    key = str(seat_num)
+    if key not in seats:
+        raise ValueError(f"seat {seat_num} isn't claimed")
+    cur = seats[key]
+    token = _claim_token(cur)
+    seats[key] = {"token": token, "bet": int(bet)}
+    sess.seat_tokens_json = json.dumps(seats)
+    db.session.commit()
 
 
 def _default_ai_seats(rules: Rules, player_seat: int) -> list[dict]:
@@ -193,9 +327,18 @@ def shoe_from_session(sess: GameSession) -> Shoe:
         penetration=rules.penetration,
         seed=sess.shoe_seed,
     )
+    # The constructor performs one initial shuffle. To reach permutation
+    # N, we have to call shuffle() (N-1) more times. Without this step,
+    # any session that's already crossed a reshuffle boundary would
+    # rewind to the initial permutation each time the shoe is rebuilt
+    # — i.e. the user would see the same hands repeat after a reshuffle.
+    needed_shuffles = max(1, int(sess.shoe_shuffles or 1))
+    for _ in range(needed_shuffles - 1):
+        shoe.shuffle()
     if sess.cards_dealt and rules.shuffle_mode != ShuffleMode.CSM:
-        # Burn forward to the recorded position. CSM doesn't accumulate dealt
-        # so we'd just reshuffle in place; skip the no-op burn.
+        # Burn forward to the recorded position within the current
+        # permutation. CSM doesn't accumulate dealt so we'd just
+        # reshuffle in place; skip the no-op burn.
         for _ in range(sess.cards_dealt):
             shoe.next_card()
     return shoe
@@ -204,6 +347,7 @@ def shoe_from_session(sess: GameSession) -> Shoe:
 def reset_shoe(sess: GameSession, *, new_seed: Optional[int] = None) -> None:
     """Keep bankroll + stats; fresh shoe + counter."""
     sess.shoe_seed = new_seed if new_seed is not None else random.randint(0, 2**31 - 1)
+    sess.shoe_shuffles = 1
     sess.cards_dealt = 0
     sess.running_count = 0
     sess.counter_cards_seen = 0

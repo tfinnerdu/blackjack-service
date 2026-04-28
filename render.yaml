@@ -10,6 +10,9 @@ services:
     buildCommand: |
       pip install -r requirements.txt
       cd client && npm ci && npm run build
+      # Migrations infra is in place (`flask db upgrade`) but not auto-run
+      # in the build yet — see docs/MIGRATIONS.md. Run `flask db stamp head`
+      # on the existing Render Postgres once, then re-enable this line.
     startCommand: gunicorn -k gthread --threads 4 -w 1 -b 0.0.0.0:$PORT wsgi:app
     healthCheckPath: /health
     envVars:

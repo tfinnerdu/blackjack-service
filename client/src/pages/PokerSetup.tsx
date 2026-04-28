@@ -41,12 +41,12 @@ export default function PokerSetup() {
   useEffect(() => {
     Promise.all([Poker.variants(), Poker.personalities()])
       .then(([v, p]) => {
-        // Only community-card variants are simulator-supported.
-        const ok = v.variants.filter(
-          (vv) => vv.deal.community_streets.length > 0
-            && vv.deal.up_cards === 0
-            && vv.deal.stud_streets.length === 0
-            && vv.deal.draws.length === 0,
+        // Simulator supports community-card (Hold'em / Omaha), draw
+        // (5-Card / 2-7 Triple / Badugi), and stud (7-Card Stud / Razz).
+        const ok = v.variants.filter((vv) =>
+          vv.deal.community_streets.length > 0
+          || vv.deal.draws.length > 0
+          || vv.deal.stud_streets.length > 0,
         );
         setVariants(ok);
         if (ok.length && !ok.find((x) => x.name === variantName)) {

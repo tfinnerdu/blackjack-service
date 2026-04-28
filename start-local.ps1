@@ -43,20 +43,34 @@ if (-not $BackendOnly) {
     }
 }
 
-# --- LAN IP (filtered for usable addresses) ---
-$LanIp = (Get-NetIPAddress -AddressFamily IPv4 |
+# --- LAN IPs (filtered for usable addresses, may have multiple) ---
+# $Host is reserved in PowerShell — use $MachineName / $LanIps for ours.
+$LanIps = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object {
-        $_.IPAddress -notmatch '^127\.' -and
-        $_.IPAddress -notmatch '^169\.254\.' -and
-        $_.InterfaceAlias -notmatch 'vEthernet|WSL|Loopback'
-    } | Select-Object -First 1).IPAddress
+        $_.IPAddress      -notmatch '^(127\.|169\.254\.)' -and
+        $_.PrefixOrigin   -ne       'WellKnown'           -and
+        $_.InterfaceAlias -notmatch 'Loopback|Virtual|WSL|vEthernet'
+    } |
+    Select-Object -ExpandProperty IPAddress -Unique
 
 if ($env:FLASK_DEBUG) { } else { $env:FLASK_DEBUG = "1" }
 
+# Computer name lets other devices on the LAN reach this box by hostname
+# instead of an IP that changes between networks. Doane standard: surface
+# all three reachability forms (Local / By name / Network) per service.
+$MachineName = $env:COMPUTERNAME
+
 Write-Host "---"
-Write-Host "Flask:  http://localhost:5050"
-if (-not $BackendOnly) { Write-Host "Vite:   http://localhost:5174 (use this for dev)" }
-if ($LanIp) { Write-Host "LAN:    http://${LanIp}:5174" }
+Write-Host "Flask:"
+Write-Host "  Local:    http://localhost:5050"
+if ($MachineName) { Write-Host "  By name:  http://${MachineName}:5050" }
+foreach ($ip in $LanIps) { Write-Host "  Network:  http://${ip}:5050" }
+if (-not $BackendOnly) {
+    Write-Host "Vite (use this URL for live dev):"
+    Write-Host "  Local:    http://localhost:5174"
+    if ($MachineName) { Write-Host "  By name:  http://${MachineName}:5174" }
+    foreach ($ip in $LanIps) { Write-Host "  Network:  http://${ip}:5174" }
+}
 Write-Host "Logs:   $Log"
 Write-Host "---"
 

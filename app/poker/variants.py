@@ -53,15 +53,21 @@ class WildKind(str, Enum):
     ONE_EYED_JACK = "one_eyed_jack"
     SUICIDE_KING = "suicide_king"
     KINGS_AND_LITTLE_ONE = "kings_and_little_one"  # kings + lowest hole card
+    # Triggered wilds: applied at deal time. AFTER_RANK fires when a card
+    # of `rank` lands face-up on the community board; the next `next_count`
+    # cards become wild. Models 'follow the queen' style rules in a way
+    # the simulator's deal loop can resolve automatically.
+    AFTER_RANK = "after_rank"
 
 
 @dataclass
 class WildRule:
     kind: WildKind
     mode: WildMode = WildMode.FULLY_WILD
-    rank: Optional[str] = None      # for kind=RANK (e.g. '2')
+    rank: Optional[str] = None      # for kind=RANK or AFTER_RANK
     suit: Optional[str] = None      # for kind=SUIT (e.g. 'H')
     card_token: Optional[str] = None  # for kind=SPECIFIC
+    next_count: int = 1             # for kind=AFTER_RANK: how many subsequent cards
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -155,6 +161,7 @@ class VariantSpec:
                 rank=w.get("rank"),
                 suit=w.get("suit"),
                 card_token=w.get("card_token"),
+                next_count=int(w.get("next_count", 1)),
             )
             for w in d.get("wilds", [])
         ]
@@ -303,9 +310,13 @@ def _follow_the_queen() -> VariantSpec:
             stud_streets=[1, 1, 1, 1],
             stud_face_down_final=True,
         ),
-        wilds=[WildRule(kind=WildKind.RANK, rank="Q", mode=WildMode.FULLY_WILD)],
+        wilds=[
+            WildRule(kind=WildKind.RANK, rank="Q", mode=WildMode.FULLY_WILD),
+            WildRule(kind=WildKind.AFTER_RANK, rank="Q", mode=WildMode.FULLY_WILD,
+                     next_count=1),
+        ],
         hand=HandRequirement.BEST_5_OF_ALL,
-        notes="The 'follow' part is a triggered wild — phase 4 wires the dynamic 'next card after Q' rule into the deal loop. v1 treats only Queens as wild.",
+        notes="Queens are static wilds; the 'follow' is the AFTER_RANK trigger — the next face-up card after each Queen also plays wild.",
     )
 
 

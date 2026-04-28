@@ -38,6 +38,7 @@ from ..engine.shoe import Shoe
 from ..models import GameSession
 from ..strategy import Capabilities, basic_strategy
 from ..strategy.book import book
+from . import shoe_trace
 from .round_state import round_from_json, round_to_json
 from .sessions import (
     rules_from_dict,
@@ -94,6 +95,42 @@ def _persist_ai_seats(sess: GameSession, ai: dict[int, AISeat]) -> None:
         d["last_results"] = list(seat.last_results)
         rows.append(d)
     sess.ai_seats_json = json.dumps(rows)
+
+
+# Heuristic EV-loss table when the human deviates from book. Values are
+# fractions of the hand's main bet, returned in cents to avoid float
+# accumulation in the running session counter. NOT a true Monte Carlo EV
+# calculation — these are coarse magnitudes that give directional
+# feedback ('mistakes are costing you ~$50 over this session') without
+# the per-action sim cost. UI labels this an estimate.
+_EV_LOSS_FRACTION: dict[tuple[str, str], float] = {
+    # (player_did, book_said) -> fraction of bet lost
+    ("hit", "stand"): 0.30,         # busts or worsens a made hand
+    ("stand", "hit"): 0.25,         # gives up easy improvement
+    ("hit", "double"): 0.30,        # missed the double bonus on top of suboptimal play
+    ("stand", "double"): 0.30,      # missed the double bonus
+    ("double", "hit"): 0.25,        # over-committed; might have hit anyway
+    ("double", "stand"): 0.50,      # double on a bad spot
+    ("split", "hit"): 0.30,
+    ("split", "stand"): 0.40,
+    ("hit", "split"): 0.20,
+    ("stand", "split"): 0.20,
+    ("surrender", "hit"): 0.25,     # took half-loss vs likely positive EV
+    ("surrender", "stand"): 0.40,   # took half-loss on a stand spot
+    ("surrender", "double"): 0.50,
+    ("hit", "surrender"): 0.25,
+    ("stand", "surrender"): 0.25,
+    ("double", "surrender"): 0.50,
+    ("split", "surrender"): 0.30,
+}
+
+
+def _ev_loss_cents(player_action: str, book_action: str, bet_dollars: int) -> int:
+    """Heuristic dollar EV lost on this single action. Returned in cents."""
+    if player_action == book_action:
+        return 0
+    fraction = _EV_LOSS_FRACTION.get((player_action, book_action), 0.20)
+    return int(round(bet_dollars * fraction * 100))
 
 
 def _capabilities_from_legal(legal: list[Action]) -> Capabilities:
@@ -304,6 +341,134 @@ def _persist_round(sess: GameSession, rnd: Round, *, started_at_dealt: int) -> N
         )
 
 
+# ---- parallel-replay bankrolls -----------------------------------------
+
+def _replay_human_profit(
+    sess: GameSession,
+    rules: Rules,
+    side_bets_cfg: SideBets,
+    started_at_dealt: int,
+    actual_seats: list[Seat],
+    ai_seats: dict[int, AISeat],
+    true_count_pre_deal: Optional[float],
+    *,
+    use_indices: bool,
+    bet_with_count: bool,
+) -> int:
+    """Replay the round at the same shoe-state and return the human seat's
+    profit under a counterfactual strategy.
+
+    `use_indices=True` plays Hi-Lo / Illustrious 18 deviations (the count
+    influences action selection). `bet_with_count=True` sizes the human's
+    bet via the count-spread pattern using the human's actual bet as the
+    base unit. Both off → "what if I'd just played perfect basic strategy."
+
+    AI seats replay with their own playstyle. Their actions can diverge
+    from the actual round (different cards arrive after the human's
+    different choices), which is fine — we only sum the human's profit.
+    """
+    # Rebuild a fresh shoe at the same point the actual round started from.
+    # Same shuffle-counter logic as shoe_from_session — replay needs to
+    # land on the current permutation, not the initial one.
+    shoe = Shoe(
+        decks=rules.decks,
+        mode=rules.shuffle_mode,
+        penetration=rules.penetration,
+        seed=sess.shoe_seed,
+    )
+    needed_shuffles = max(1, int(sess.shoe_shuffles or 1))
+    for _ in range(needed_shuffles - 1):
+        shoe.shuffle()
+    if rules.shuffle_mode != ShuffleMode.CSM:
+        for _ in range(started_at_dealt):
+            shoe.next_card()
+
+    # Replicate the seat configuration of the actual round, with the
+    # optional bet override on the human seat.
+    rnd = Round(rules, side_bets_cfg, shoe)
+    human_seat_num = sess.player_seat
+    human_main_bet = next(
+        (s.main_bet for s in actual_seats if s.is_human), 0
+    )
+    if human_main_bet <= 0:
+        return 0
+
+    if bet_with_count:
+        from ..ai.bet_patterns import bet_count_spread
+        rng = random.Random(0)  # not used by bet_count_spread
+        human_bet = bet_count_spread(
+            sess.bankroll, human_main_bet, [], rules,
+            true_count_pre_deal, rng,
+        )
+    else:
+        human_bet = human_main_bet
+
+    for s in actual_seats:
+        rnd.add_seat(Seat(
+            seat_num=s.seat_num,
+            main_bet=human_bet if s.is_human else s.main_bet,
+            is_human=s.is_human,
+        ))
+
+    rnd.deal()
+
+    if rnd.state == RoundState.INSURANCE:
+        for seat in rnd.seats:
+            if seat.is_human:
+                from ..strategy.book import book_insurance
+                ins = book_insurance(true_count_pre_deal if use_indices else None)
+                accept = ins.note == "take insurance"
+                rnd.offer_insurance(seat.seat_num, accept=accept)
+            else:
+                ai = ai_seats.get(seat.seat_num)
+                accept = (
+                    ai is not None
+                    and ai.playstyle == "counter"
+                    and true_count_pre_deal is not None
+                    and insurance_correct(true_count_pre_deal)
+                )
+                rnd.offer_insurance(seat.seat_num, accept=accept)
+        rnd.close_insurance()
+
+    while rnd.state == RoundState.PLAYING:
+        seat = rnd.active_seat
+        hand = rnd.active_hand
+        if seat is None or hand is None:
+            break
+        legal = rnd.legal_actions()
+        caps = _capabilities_from_legal(legal)
+
+        if seat.is_human:
+            tc_for_book = true_count_pre_deal if use_indices else None
+            action = book(
+                hand, rnd.dealer.cards[0], rules, caps,
+                true_count=tc_for_book,
+            ).action
+        else:
+            ai = ai_seats.get(seat.seat_num)
+            if ai is not None:
+                action = ai.pick_action(
+                    hand, rnd.dealer.cards[0], rules, caps,
+                    true_count_pre_deal,
+                )
+            else:
+                action = "stand"
+
+        if action not in legal:
+            action = "stand" if "stand" in legal else legal[0]
+        rnd.act(action)
+
+    if rnd.state != RoundState.COMPLETE or rnd.result is None:
+        return 0
+
+    profit = sum(
+        o.profit for o in rnd.result.outcomes if o.seat_num == human_seat_num
+    )
+    profit += rnd.result.insurance_outcomes.get(human_seat_num, 0)
+    profit += sum(rnd.result.side_bet_outcomes.get(human_seat_num, {}).values())
+    return profit
+
+
 def _settle_into_session(sess: GameSession, rnd: Round) -> None:
     """Fold a completed round into the session: bankroll, AI bankrolls,
     counter, cards_dealt, hands_played, last_results, book_mistakes."""
@@ -311,6 +476,18 @@ def _settle_into_session(sess: GameSession, rnd: Round) -> None:
         return
 
     rules = _rules(sess)
+    side_bets_cfg = _side_bets(sess)
+    # Snapshot for parallel replay before we advance the shoe + counter.
+    replay_started_at = sess.cards_dealt
+    replay_seats = [
+        Seat(seat_num=s.seat_num, main_bet=s.main_bet, is_human=s.is_human)
+        for s in rnd.seats
+    ]
+    replay_ai = _ai_seats(sess)
+    replay_true_count: Optional[float] = None
+    if sess.counter_cards_seen and rules.shuffle_mode != ShuffleMode.CSM:
+        decks_remaining = max(0.5, (rules.decks * 52 - sess.counter_cards_seen) / 52.0)
+        replay_true_count = sess.running_count / decks_remaining
 
     # Counter + cards-dealt update from every visible card.
     counter = Counter(decks=rules.decks)
@@ -373,6 +550,45 @@ def _settle_into_session(sess: GameSession, rnd: Round) -> None:
         ai_seat.record_result(seat_profit)
     _persist_ai_seats(sess, ai)
 
+    # Parallel-replay bankrolls. Two counterfactuals per round: human seat
+    # plays book, and human seat plays book + count-aware bet sizing.
+    # Failures here must not break settlement — they're an extra read-only
+    # stat, not a hard correctness guarantee.
+    try:
+        book_profit = _replay_human_profit(
+            sess, rules, side_bets_cfg, replay_started_at, replay_seats,
+            replay_ai, replay_true_count,
+            use_indices=False, bet_with_count=False,
+        )
+        counter_profit = _replay_human_profit(
+            sess, rules, side_bets_cfg, replay_started_at, replay_seats,
+            replay_ai, replay_true_count,
+            use_indices=True, bet_with_count=True,
+        )
+    except Exception:
+        book_profit = 0
+        counter_profit = 0
+    sess.book_bankroll = (sess.book_bankroll or 0) + book_profit
+    sess.counter_bankroll = (sess.counter_bankroll or 0) + counter_profit
+
+    history: list = json.loads(sess.bankroll_history_json or "[]")
+    history.append({
+        "hand": sess.hands_played,
+        "actual": sess.bankroll,
+        "book": sess.book_bankroll,
+        "counter": sess.counter_bankroll,
+    })
+    if len(history) > 1000:
+        history = history[-1000:]
+    sess.bankroll_history_json = json.dumps(history)
+
+    if shoe_trace.is_enabled():
+        shoe_trace.trace_round(
+            sess, rnd,
+            running_count_after=sess.running_count,
+            cards_seen_after=sess.counter_cards_seen,
+        )
+
 
 # ---- start_round -------------------------------------------------------
 
@@ -407,6 +623,12 @@ def start_round(sess: GameSession, req: StartRoundRequest) -> RoundView:
     shoe = shoe_from_session(sess)
     if shoe.needs_reshuffle:
         shoe.shuffle()
+        # Bump the persisted shuffle counter so the next page-load
+        # rebuilds the shoe at the same NEW permutation. Without this,
+        # rebuilding from (seed, cards_dealt) alone rewinds to the
+        # initial permutation — i.e. the user sees the same hands
+        # again after a reshuffle.
+        sess.shoe_shuffles = (sess.shoe_shuffles or 1) + 1
         sess.cards_dealt = 0
         sess.running_count = 0
         sess.counter_cards_seen = 0
@@ -422,6 +644,17 @@ def start_round(sess: GameSession, req: StartRoundRequest) -> RoundView:
         decks_remaining = max(0.5, (rules.decks * 52 - sess.counter_cards_seen) / 52.0)
         true_count_now = sess.running_count / decks_remaining
 
+    claimed_seats = json.loads(sess.seat_tokens_json or "{}")
+    # Map seat_num -> guest's chosen bet (None if they haven't picked).
+    from .sessions import _claim_bet, _claim_token
+    claim_bets: dict[int, Optional[int]] = {}
+    claimed_seat_nums: set[int] = set()
+    for seat_num_str, value in claimed_seats.items():
+        if _claim_token(value):
+            n = int(seat_num_str)
+            claimed_seat_nums.add(n)
+            claim_bets[n] = _claim_bet(value)
+
     for seat_num in sorted(set(list(ai_seats.keys()) + [sess.player_seat])):
         if seat_num == sess.player_seat:
             sb_wagers = _side_bet_wagers_from_dict(sb)
@@ -434,6 +667,22 @@ def start_round(sess: GameSession, req: StartRoundRequest) -> RoundView:
             ))
             continue
         ai = ai_seats[seat_num]
+        # A guest claim converts an AI seat to human-controlled. Their
+        # preferred bet (set via the per-guest endpoint) wins; otherwise
+        # we fall back to the bot's base_bet so the seat still plays.
+        if seat_num in claimed_seat_nums:
+            requested = claim_bets.get(seat_num)
+            target = requested if requested is not None else ai.base_bet
+            bet = max(rules.min_bet, min(int(target), ai.bankroll, rules.max_bet))
+            if bet <= 0 or ai.bankroll < rules.min_bet:
+                continue  # claimed but bust — sits out this round
+            rnd.add_seat(Seat(
+                seat_num=seat_num,
+                main_bet=bet,
+                is_human=True,
+                bankroll_before=ai.bankroll,
+            ))
+            continue
         bet = ai.pick_bet(rules, true_count_now)
         if bet <= 0:
             continue  # bust seat sits this round out
@@ -507,6 +756,9 @@ def _load_active_round(sess: GameSession) -> tuple[Round, int, dict[int, AISeat]
         penetration=rules.penetration,
         seed=sess.shoe_seed,
     )
+    needed_shuffles = max(1, int(sess.shoe_shuffles or 1))
+    for _ in range(needed_shuffles - 1):
+        shoe.shuffle()
     if rules.shuffle_mode != ShuffleMode.CSM:
         for _ in range(started_at + consumed):
             shoe.next_card()
@@ -526,17 +778,32 @@ def _load_active_round(sess: GameSession) -> tuple[Round, int, dict[int, AISeat]
 
 # ---- take_insurance ---------------------------------------------------
 
-def take_insurance(sess: GameSession, accept: bool, amount: Optional[int] = None) -> RoundView:
+def take_insurance(
+    sess: GameSession,
+    accept: bool,
+    amount: Optional[int] = None,
+    *,
+    seat_num: Optional[int] = None,
+) -> RoundView:
     rnd, started_at_dealt, ai, true_count_now = _load_active_round(sess)
     rules = _rules(sess)
 
     if rnd.state != RoundState.INSURANCE:
         raise GameError("not in insurance state")
 
-    rnd.offer_insurance(seat_num=sess.player_seat, accept=accept, amount=amount)
-    rnd.close_insurance()
-    if rnd.state == RoundState.PLAYING:
-        _auto_play_until_human_or_done(rnd, rules, ai, true_count_now)
+    target_seat = seat_num if seat_num is not None else sess.player_seat
+    rnd.offer_insurance(seat_num=target_seat, accept=accept, amount=amount)
+    # Only close insurance once every human seat has decided. AI seats
+    # decide via _auto_decide_ai_insurance up-front; if more humans
+    # remain, leave the round in INSURANCE state.
+    pending = [
+        s for s in rnd.seats
+        if s.is_human and not s.insurance_decided
+    ]
+    if not pending:
+        rnd.close_insurance()
+        if rnd.state == RoundState.PLAYING:
+            _auto_play_until_human_or_done(rnd, rules, ai, true_count_now)
 
     if rnd.state == RoundState.COMPLETE:
         _settle_into_session(sess, rnd)
@@ -547,7 +814,12 @@ def take_insurance(sess: GameSession, accept: bool, amount: Optional[int] = None
 
 # ---- take_action ------------------------------------------------------
 
-def take_action(sess: GameSession, action: Action) -> RoundView:
+def take_action(
+    sess: GameSession,
+    action: Action,
+    *,
+    seat_num: Optional[int] = None,
+) -> RoundView:
     rnd, started_at_dealt, ai, true_count_now = _load_active_round(sess)
     rules = _rules(sess)
 
@@ -556,31 +828,43 @@ def take_action(sess: GameSession, action: Action) -> RoundView:
     seat = rnd.active_seat
     if seat is None or not seat.is_human:
         raise GameError("it's not the human's turn")
+    if seat_num is not None and seat.seat_num != seat_num:
+        raise GameError(
+            f"not your turn — seat {seat.seat_num} is acting, "
+            f"caller's seat is {seat_num}"
+        )
 
     legal = rnd.legal_actions()
     if action not in legal:
         raise GameError(f"illegal action; legal: {legal}")
 
     # Bookkeeping: record book vs actual for the hand BEFORE we mutate it.
-    # A "mistake" is any time the human's action differs from the book.
+    # A "mistake" is any time the host's action differs from the book;
+    # guest seats don't accrue book-mistakes since they're not the user
+    # whose stats this session tracks.
+    is_host_seat = seat.seat_num == sess.player_seat
     hand = rnd.active_hand
-    if hand is not None:
+    if hand is not None and is_host_seat:
         caps = _capabilities_from_legal(legal)
         recommended = book(hand, rnd.dealer.cards[0], rules, caps, true_count=true_count_now).action
         if action != recommended:
             sess.book_mistakes += 1
+            sess.ev_lost_cents += _ev_loss_cents(action, recommended, hand.bet)
 
-    # Doubling consumes an extra unit of bankroll (the original main_bet
-    # amount). Splitting also requires another unit. Both are pre-checked
-    # against the human's bankroll here so we don't go negative if they
-    # ignore the UI's enforcement.
+    # Doubling/splitting requires another bet unit. Check against the
+    # right bankroll: host pulls from sess.bankroll; a guest seat pulls
+    # from the AI config row's bankroll (which the guest inherited).
+    available_bankroll = (
+        sess.bankroll if is_host_seat
+        else (ai.get(seat.seat_num).bankroll if ai.get(seat.seat_num) else 0)
+    )
     if action == "double":
         if hand is None:
             raise GameError("no active hand")
-        if hand.bet > sess.bankroll:
+        if hand.bet > available_bankroll:
             raise GameError("insufficient bankroll to double")
     if action == "split":
-        if seat.main_bet > sess.bankroll:
+        if seat.main_bet > available_bankroll:
             raise GameError("insufficient bankroll to split")
 
     rnd.act(action)

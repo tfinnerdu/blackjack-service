@@ -502,18 +502,27 @@ function EquityPanel({
     !!variant
     && variant.deal.up_cards === 0
     && variant.deal.stud_streets.length === 0
-    && variant.deal.draws.length === 0
-    && variant.wilds.length === 0;
+    && variant.deal.draws.length === 0;
+  const hasWilds = !!variant && (
+    variant.wilds.length > 0 || (variant.deck?.jokers ?? 0) > 0
+  );
   return (
     <div className="rounded-xl bg-felt-dark/60 p-3 ring-1 ring-white/10 space-y-2">
       <div className="text-xs uppercase tracking-wide text-white/60">Equity (sim)</div>
       {!supported ? (
         <div className="text-xs text-white/50">
-          Equity sim supports community-card variants without wilds. Use the
-          companion above for variants with wild rules.
+          Equity sim supports community-card variants only. Stud / draw
+          simulators are on the roadmap; for now use the companion above.
         </div>
       ) : (
         <>
+          {hasWilds && (
+            <div className="text-xs text-amber-200/80">
+              Wild variant — runs at 500 iterations (vs 2000) due to the
+              substitution cost. Triggered wilds (e.g. follow-the-queen)
+              are not modelled in the equity sim.
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span className="text-xs text-white/60">vs</span>
             <button
