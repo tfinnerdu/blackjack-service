@@ -129,20 +129,65 @@ archetypes (your buddy who calls everything, your buddy who bluffs every
 river), not GTO solvers. You're meant to learn how to *adjust to
 different player types*, not to beat a Monte Carlo simulator.
 
+## Per-hand wild marking (now live)
+
+Dealer at your home game says "follow the queen" or "all kings wild
+this hand only"? You don't have to save a new variant.
+
+- Tap **Mark cards wild for this hand…** in the companion
+- Tap any of the chips in your hand / hole / board to toggle wild
+- Hit Analyze — the helper treats those cards as wild for THIS hand
+  and explains the resolution alongside any always-wild rules from the
+  variant itself
+
+## Equity (now live)
+
+Below the analysis panel, set how many opponents you're up against and
+hit Run. Monte Carlo runs 2000 simulations against random hole cards
+and complete boards, returns:
+
+- **Win %** — how often you win outright
+- **Tie %** — split pots
+- **Loss %** — opponent has the better hand
+- **Equity %** — wins + half-ties; the standard "what's my share of
+  the pot" number
+
+Hold'em + Omaha only for now (community-card variants without wilds).
+Wild variants stay in companion mode where the substitution gets the
+care it needs.
+
+## Form-based variant builder (now live)
+
+Saved variants used to need raw JSON. Now there's a structured form:
+
+- Identity / family
+- Deck size + jokers (steppers)
+- Deal scheme (hole, up, community streets, stud streets, draws)
+- **Wild rules**: inline list with kind dropdown (joker / rank / suit /
+  specific card / one-eyed jack / suicide king), mode dropdown (fully
+  wild / S/F-only / bug), and contextual rank/suit/card pickers per
+  kind
+- Hand requirement, hi/lo split, low rule, 8-or-better qualifier
+- Notes
+
+Power users can flip to JSON view via the header toggle for full
+control.
+
 ## What's coming next
 
-- **Wild rule builder** UI: declare your own wilds for custom variants
-  (the engine already supports it via inline VariantSpec; the UI to
-  build them visually is the next natural step)
-- **Triggered wilds**: "after a Queen face-up, the next card is wild" type
-  rules baked into the deal loop
-- **Saved variants**: punch in a new variant once, save it, pick it next
-  poker night
+- **Triggered wilds**: "after a Queen face-up, the next card is wild"
+  type rules baked into the deal loop. The companion handles the
+  static-cards-marked-wild case via tap-mark; truly dynamic rules
+  baked into a saved variant are still pending.
 - **Stud + draw simulators**: 7-Stud, Razz, 5-Card Draw, 2-7 Triple
   Draw. Each needs its own state machine — Hold'em's was first because
   it's the most common.
-- **Equity calculator**: "how often do I win this hand to the river?"
-  Monte Carlo against random opponents
+- **Per-personality stats** in the simulator: track your win rate
+  against each archetype so you know which players you're crushing
+  and which are crushing you.
+- **Equity for stud / draw / wild variants**: the eval engine supports
+  all of them; the equity sim's inner loop just needs to integrate
+  evaluate_with_wilds + the relevant deal scheme.
 
 ---
 
