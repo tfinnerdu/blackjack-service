@@ -220,8 +220,8 @@ def resolve_seat_for_token(token: str) -> tuple[Optional[GameSession], Optional[
     ).all()
     for cand in candidates:
         seats = json.loads(cand.seat_tokens_json or "{}")
-        for seat_num_str, t in seats.items():
-            if t == token:
+        for seat_num_str, value in seats.items():
+            if _claim_token(value) == token:
                 return cand, int(seat_num_str)
     return None, None
 
@@ -241,7 +241,10 @@ def claim_seat(sess: GameSession, seat_num: int) -> str:
 
     seats = json.loads(sess.seat_tokens_json or "{}")
     new_token = secrets.token_urlsafe(32)
-    seats[str(seat_num)] = new_token
+    # New shape: {token, bet} — `bet=None` means "use the bot's base_bet".
+    # Older sessions may have plain-string values; the helpers below
+    # handle both shapes transparently.
+    seats[str(seat_num)] = {"token": new_token, "bet": None}
     sess.seat_tokens_json = json.dumps(seats)
     db.session.commit()
     return new_token
@@ -254,6 +257,44 @@ def release_seat(sess: GameSession, seat_num: int) -> None:
         del seats[str(seat_num)]
         sess.seat_tokens_json = json.dumps(seats)
         db.session.commit()
+
+
+# ---- seat-claim shape helpers ----------------------------------------
+# Older rows store {seat_num: "<token>"}; newer rows store
+# {seat_num: {"token": "<token>", "bet": <int or None>}}.
+
+def _claim_token(value) -> Optional[str]:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return value.get("token")
+    return None
+
+
+def _claim_bet(value) -> Optional[int]:
+    if isinstance(value, dict):
+        b = value.get("bet")
+        return int(b) if b is not None else None
+    return None
+
+
+def get_seat_claim_bet(sess: GameSession, seat_num: int) -> Optional[int]:
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    return _claim_bet(seats.get(str(seat_num)))
+
+
+def set_seat_claim_bet(sess: GameSession, seat_num: int, bet: int) -> None:
+    """Update a claimed seat's preferred bet for the next round.
+    Raises ValueError if the seat isn't claimed."""
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    key = str(seat_num)
+    if key not in seats:
+        raise ValueError(f"seat {seat_num} isn't claimed")
+    cur = seats[key]
+    token = _claim_token(cur)
+    seats[key] = {"token": token, "bet": int(bet)}
+    sess.seat_tokens_json = json.dumps(seats)
+    db.session.commit()
 
 
 def _default_ai_seats(rules: Rules, player_seat: int) -> list[dict]:

@@ -1,11 +1,11 @@
 """Craps API.
 
-POST   /api/v1/craps/sessions             create a table
-GET    /api/v1/craps/sessions/me          fetch the active session
-POST   /api/v1/craps/sessions/me/bets     add bets to the book
-DELETE /api/v1/craps/sessions/me/bets/<id>  cancel an unresolved bet
-POST   /api/v1/craps/sessions/me/roll     roll the dice + resolve
-DELETE /api/v1/craps/sessions/me          end the current session
+POST   /api/v1/craps/sessions                   create a table
+GET    /api/v1/craps/sessions/me                fetch the caller's view
+POST   /api/v1/craps/sessions/me/bets           append bets to caller's book
+DELETE /api/v1/craps/sessions/me/bets/<id>      cancel a bet from caller's book
+POST   /api/v1/craps/sessions/me/roll           host triggers roll; settles all
+DELETE /api/v1/craps/sessions/me                end the session (host only)
 GET    /api/v1/craps/sessions/by-code/<code>           lobby
 POST   /api/v1/craps/sessions/by-code/<code>/join      claim a guest token
 """
@@ -15,8 +15,11 @@ from flask import Blueprint, jsonify, request
 
 from ..casino import (
     claim_guest_seat,
+    get_caller_bankroll,
+    get_caller_bets,
     get_session_for_room_code,
     get_session_for_token,
+    participants,
 )
 from ..db import db
 from ..services.craps import (
@@ -47,13 +50,34 @@ def _attach_cookie(response, token: str):
 def _resolve_caller():
     sess, is_host = get_session_for_token(get_session_token() or "")
     if sess is None:
-        return None, False, _err("no craps session", "NO_SESSION", 404)
+        return None, False, None, _err("no craps session", "NO_SESSION", 404)
     if sess.game_type != "craps":
-        return None, False, _err(
+        return None, False, None, _err(
             f"caller's session is {sess.game_type!r}, not craps",
             "WRONG_GAME", 409,
         )
-    return sess, is_host, None
+    token = get_session_token() or ""
+    return sess, is_host, token, None
+
+
+def _participant_view(sess, token: str, is_host: bool) -> dict:
+    payload = sess.to_dict()
+    if not is_host:
+        payload.pop("token", None)
+    payload["caller_is_host"] = is_host
+    payload["caller_bankroll"] = get_caller_bankroll(sess, token)
+    payload["caller_book"] = get_caller_bets(sess, token)
+    payload["participants"] = [
+        {
+            "label": entry.get("label"),
+            "is_host": is_h,
+            "bankroll": int(entry.get("bankroll", 0)),
+            "rounds_played": int(entry.get("rounds_played", 0)),
+            "open_bets": len(entry.get("current_bets", [])),
+        }
+        for _, entry, is_h in participants(sess)
+    ]
+    return payload
 
 
 @bp.post("/sessions")
@@ -75,17 +99,15 @@ def create():
 
 @bp.get("/sessions/me")
 def get_me():
-    sess, is_host, err = _resolve_caller()
+    sess, is_host, token, err = _resolve_caller()
     if err:
         return err
-    payload = sess.to_dict()
-    payload["caller_is_host"] = is_host
-    return jsonify(payload)
+    return jsonify(_participant_view(sess, token, is_host))
 
 
 @bp.post("/sessions/me/bets")
 def add_bets_route():
-    sess, _is_host, err = _resolve_caller()
+    sess, is_host, token, err = _resolve_caller()
     if err:
         return err
     body = request.get_json() or {}
@@ -93,28 +115,33 @@ def add_bets_route():
     if not isinstance(bets, list):
         return _err("bets must be a list", "BAD_REQUEST")
     try:
-        state = add_bets(sess, bets)
+        add_bets(sess, token, bets)
     except CrapsError as e:
         return _err(str(e), "CRAPS_ERROR", 409)
-    return jsonify(state)
+    return jsonify(_participant_view(sess, token, is_host))
 
 
 @bp.delete("/sessions/me/bets/<bet_id>")
 def cancel_route(bet_id: str):
-    sess, _is_host, err = _resolve_caller()
+    sess, is_host, token, err = _resolve_caller()
     if err:
         return err
-    state = cancel_bet(sess, bet_id)
-    return jsonify(state)
+    try:
+        cancel_bet(sess, token, bet_id)
+    except CrapsError as e:
+        return _err(str(e), "CRAPS_ERROR", 409)
+    return jsonify(_participant_view(sess, token, is_host))
 
 
 @bp.post("/sessions/me/roll")
 def roll_route():
-    sess, _is_host, err = _resolve_caller()
+    sess, is_host, _token, err = _resolve_caller()
     if err:
         return err
+    if not is_host:
+        return _err("only the host can roll the dice", "FORBIDDEN", 403)
     body = request.get_json() or {}
-    dice = body.get("dice")  # optional [d1, d2] for deterministic-test plumbing
+    dice = body.get("dice")
     parsed_dice = None
     if dice:
         if not (isinstance(dice, list) and len(dice) == 2):
@@ -124,14 +151,16 @@ def roll_route():
         result = roll_service(sess, dice=parsed_dice)
     except CrapsError as e:
         return _err(str(e), "CRAPS_ERROR", 409)
-    return jsonify(result.to_dict())
+    return jsonify(result)
 
 
 @bp.delete("/sessions/me")
 def delete_me():
-    sess, _is_host, err = _resolve_caller()
+    sess, is_host, _token, err = _resolve_caller()
     if err:
         return err
+    if not is_host:
+        return _err("only the host can end the room", "FORBIDDEN", 403)
     db.session.delete(sess)
     db.session.commit()
     response = jsonify(deleted=True)
@@ -146,6 +175,15 @@ def get_by_code(code: str):
         return _err("no such craps room", "NO_ROOM", 404)
     payload = sess.to_dict()
     payload.pop("token", None)
+    payload["participants"] = [
+        {
+            "label": entry.get("label"),
+            "is_host": is_h,
+            "bankroll": int(entry.get("bankroll", 0)),
+            "rounds_played": int(entry.get("rounds_played", 0)),
+        }
+        for _, entry, is_h in participants(sess)
+    ]
     return jsonify(payload)
 
 
@@ -156,7 +194,12 @@ def join_by_code(code: str):
         return _err("no such craps room", "NO_ROOM", 404)
     body = request.get_json() or {}
     label = body.get("label") or None
-    token = claim_guest_seat(sess, label=label)
+    starting = body.get("starting_bankroll")
+    token = claim_guest_seat(
+        sess,
+        label=label,
+        starting_bankroll=int(starting) if starting else None,
+    )
     response = jsonify(token=token, room=sess.to_dict())
     response.status_code = 201
     return _attach_cookie(response, token)

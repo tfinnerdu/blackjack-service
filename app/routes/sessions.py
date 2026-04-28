@@ -22,11 +22,13 @@ from ..services.sessions import (
     claim_seat,
     create_from_template,
     get_current_session,
+    get_seat_claim_bet,
     get_session_by_room_code,
     get_session_token,
     release_seat,
     reset_shoe,
     resolve_seat_for_token,
+    set_seat_claim_bet,
 )
 
 bp = Blueprint("sessions", __name__, url_prefix="/api/v1/sessions")
@@ -83,7 +85,43 @@ def get_me():
     payload = sess.to_dict()
     payload["caller_seat"] = seat_num
     payload["caller_is_host"] = (seat_num == sess.player_seat)
+    # Caller's preferred next-round bet (None = will use the bot's base_bet).
+    payload["caller_seat_bet"] = (
+        get_seat_claim_bet(sess, seat_num)
+        if seat_num is not None and seat_num != sess.player_seat
+        else None
+    )
     return jsonify(payload)
+
+
+@bp.post("/me/seat/bet")
+def set_caller_seat_bet():
+    """Caller updates their own claimed seat's bet for the next round.
+    Host's seat is set per-round via the round-start endpoint instead."""
+    sess, seat_num = resolve_seat_for_token(get_session_token() or "")
+    if not sess or seat_num is None:
+        return _err("no active session", "NO_SESSION", 404)
+    if seat_num == sess.player_seat:
+        return _err(
+            "host bets via the round-start endpoint, not seat bet",
+            "FORBIDDEN", 403,
+        )
+    body = request.get_json() or {}
+    bet = body.get("bet")
+    if not isinstance(bet, int) or bet <= 0:
+        return _err("bet must be int > 0", "BAD_REQUEST")
+    rules = json.loads(sess.rules_json)
+    if not (rules.get("min_bet", 1) <= bet <= rules.get("max_bet", 500)):
+        return _err(
+            f"bet {bet} outside table limits "
+            f"{rules.get('min_bet')}..{rules.get('max_bet')}",
+            "BAD_REQUEST",
+        )
+    try:
+        set_seat_claim_bet(sess, seat_num, bet)
+    except ValueError as e:
+        return _err(str(e), "BAD_REQUEST")
+    return jsonify(seat_num=seat_num, bet=bet)
 
 
 @bp.get("/me/stats")
@@ -150,6 +188,8 @@ def reset_me():
 def _room_view(sess) -> dict:
     """Public lobby view of a room — no host token, no shoe internals.
     Anyone with the room code can fetch this to decide which seat to grab."""
+    from ..services.sessions import _claim_bet, _claim_token
+
     rules = json.loads(sess.rules_json)
     ai_rows = json.loads(sess.ai_seats_json)
     claimed = json.loads(sess.seat_tokens_json or "{}")
@@ -159,7 +199,8 @@ def _room_view(sess) -> dict:
             seats.append({"seat_num": n, "kind": "host", "claimable": False})
             continue
         ai = next((r for r in ai_rows if int(r["seat_num"]) == n), None)
-        is_claimed = str(n) in claimed
+        claim_value = claimed.get(str(n))
+        is_claimed = _claim_token(claim_value) is not None
         seats.append({
             "seat_num": n,
             "kind": "guest" if is_claimed else "ai",
@@ -168,6 +209,8 @@ def _room_view(sess) -> dict:
             "bet_pattern": ai.get("bet_pattern") if ai else None,
             "base_bet": ai.get("base_bet") if ai else None,
             "bankroll": ai.get("bankroll") if ai else None,
+            # Surface the guest's chosen bet (or null = "use bot base bet").
+            "guest_bet": _claim_bet(claim_value) if is_claimed else None,
         })
     return {
         "room_code": sess.room_code,
@@ -203,13 +246,15 @@ def claim_seat_route(code: str, seat_num: int):
 
 @bp.post("/by-code/<code>/seats/<int:seat_num>/release")
 def release_seat_route(code: str, seat_num: int):
+    from ..services.sessions import _claim_token
+
     sess = get_session_by_room_code(code)
     if not sess:
         return _err("no such room", "NO_ROOM", 404)
     # Only the seat owner (or host) can release.
     caller = get_session_token() or ""
     seats = json.loads(sess.seat_tokens_json or "{}")
-    is_owner = seats.get(str(seat_num)) == caller
+    is_owner = _claim_token(seats.get(str(seat_num))) == caller
     is_host = caller == sess.token
     if not (is_owner or is_host):
         return _err("not authorized to release this seat", "FORBIDDEN", 403)

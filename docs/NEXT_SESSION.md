@@ -7,7 +7,7 @@ session that landed the punch-list. Read this first, then `git log
 ## Current state
 
 - **Branch:** `main` is the only working branch. Pushes redeploy Render.
-- **Tests:** 496 backend pytest, frontend typecheck + build clean.
+- **Tests:** 509 backend pytest, frontend typecheck + build clean.
 - **Render:** live at the user's blackjack-service URL. gthread workers,
   Postgres free tier. Health = `/health`.
 - **Local dev ports:** Flask `5050`, Vite `5174` (project-specific
@@ -189,7 +189,43 @@ build clean. The fairness audit (now 9 tests) covers multi-seed,
 single-deck, book-play, rank uniformity, deal order, counter math,
 and per-up-card dealer bust rates.
 
-### 8. Lower-priority parking lot — three of four landed earlier
+### 8. ✅ Multi-player rooms for casino games + per-guest bets — landed
+
+**Casino multi-player.** `CasinoSession` now stores per-guest state
+inside `guest_tokens_json` — each guest has their own bankroll,
+pending bets, and history. The host's pending bets live in
+`state_json.host_bets`. New helpers in `app/casino/session.py`:
+`participants(sess)`, `get_caller_bankroll`, `get_caller_bets`,
+`set_caller_bets`, `apply_round_to_participant`.
+
+Each game now uses a stage-then-trigger flow:
+- `POST /sessions/me/bets` (anyone): the caller stages their pending
+  bets. Validated against the caller's bankroll.
+- `POST /sessions/me/spin|play|roll` (host only): resolves every
+  participant's pending bets against the same outcome and updates
+  each bankroll independently.
+
+Each game's setup screen includes a "Join with code" input so a
+guest can drop in via the URL or a typed code. Play pages show a
+participants list (with presence dots + per-player bankroll), poll
+every 4s for live updates, and gate the trigger button (Spin / Deal
+/ Roll) to the host only.
+
+10 backend tests in `tests/test_casino_multiplayer.py` cover join +
+seeding, per-participant bet validation, simultaneous settlement,
+host-only triggers, and per-guest book persistence in craps.
+
+**Blackjack per-guest bets.** `seat_tokens_json` now stores
+`{seat: {token, bet}}` (still backwards-compatible with the legacy
+plain-token shape). New endpoint `POST /sessions/me/seat/bet` lets
+a guest set their preferred bet for the next round; `start_round`
+honors it and falls back to the bot's `base_bet` when unset. Play
+page renders a guest-only bet picker for non-host callers.
+
+3 new room-code tests in `tests/test_room_code.py` cover the new
+endpoint (set / view / table-limit validation).
+
+### 9. Lower-priority parking lot — three of four landed earlier
 
 - **✅ Stud bring-in mechanics**: 3rd-street lowest up-card brings in
   (highest in Razz), suit tie-break C < D < H < S. 4th-street onward

@@ -9,19 +9,33 @@ holds whatever the game wants, `history_json` is the capped per-round
 log the Stats UI plots.
 """
 from .session import (
-    create_session,
+    apply_round_to_participant,
     claim_guest_seat,
+    clear_caller_bets,
+    create_session,
+    get_caller_bankroll,
+    get_caller_bets,
+    get_guest_entry,
     get_session_for_room_code,
     get_session_for_token,
+    participants,
     record_round,
     release_guest_seat,
+    set_caller_bets,
 )
 
 __all__ = [
-    "create_session",
+    "apply_round_to_participant",
     "claim_guest_seat",
+    "clear_caller_bets",
+    "create_session",
+    "get_caller_bankroll",
+    "get_caller_bets",
+    "get_guest_entry",
     "get_session_for_room_code",
     "get_session_for_token",
+    "participants",
     "record_round",
     "release_guest_seat",
+    "set_caller_bets",
 ]

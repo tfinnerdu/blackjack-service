@@ -181,6 +181,70 @@ def test_guest_token_can_act_on_their_seat_only():
     assert r_ok.status_code == 200
 
 
+def test_guest_can_set_their_seat_bet():
+    """A guest claims seat 2, then sets a custom bet for the next round.
+    The host's session view (via get_seat_claim_bet) should reflect it."""
+    from app.services.sessions import get_seat_claim_bet
+
+    host = _client()
+    code = _new_session(host).get_json()["room_code"]
+    guest = host.application.test_client()
+    guest.post(f"/api/v1/sessions/by-code/{code}/seats/2/claim")
+
+    r = guest.post(
+        "/api/v1/sessions/me/seat/bet",
+        data=json.dumps({"bet": 25}),
+        content_type="application/json",
+    )
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["seat_num"] == 2 and body["bet"] == 25
+
+    # Caller's view exposes the chosen bet.
+    me = guest.get("/api/v1/sessions/me").get_json()
+    assert me["caller_seat"] == 2
+    assert me["caller_seat_bet"] == 25
+
+    # Lobby surfaces it for everyone.
+    lobby = host.get(f"/api/v1/sessions/by-code/{code}").get_json()
+    seat2 = next(s for s in lobby["seats"] if s["seat_num"] == 2)
+    assert seat2["guest_bet"] == 25
+
+    # Server-side helper agrees.
+    with host.application.app_context():
+        from app.models import GameSession
+        sess = GameSession.query.filter_by(room_code=code).first()
+        assert get_seat_claim_bet(sess, 2) == 25
+
+
+def test_host_cannot_set_their_own_seat_bet_via_endpoint():
+    """The host bets via /rounds (per-round); their seat-bet endpoint
+    is only meaningful for guests."""
+    host = _client()
+    _new_session(host)
+    r = host.post(
+        "/api/v1/sessions/me/seat/bet",
+        data=json.dumps({"bet": 25}),
+        content_type="application/json",
+    )
+    assert r.status_code == 403
+
+
+def test_guest_seat_bet_must_be_within_table_limits():
+    host = _client()
+    code = _new_session(host).get_json()["room_code"]
+    guest = host.application.test_client()
+    guest.post(f"/api/v1/sessions/by-code/{code}/seats/2/claim")
+
+    # Below min_bet ($5).
+    r = guest.post(
+        "/api/v1/sessions/me/seat/bet",
+        data=json.dumps({"bet": 2}),
+        content_type="application/json",
+    )
+    assert r.status_code == 400
+
+
 def test_guest_can_view_active_round():
     """Read-only round view should work for any seat owner via cookie."""
     host = _client()

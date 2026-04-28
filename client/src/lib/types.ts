@@ -160,6 +160,7 @@ export interface SessionView {
   updated_at: string;
   caller_seat?: number | null;
   caller_is_host?: boolean;
+  caller_seat_bet?: number | null;
 }
 
 export interface RoomSeatView {

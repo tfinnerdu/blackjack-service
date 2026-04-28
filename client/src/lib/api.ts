@@ -143,19 +143,62 @@ export const Rooms = {
 
 // ---- casino: roulette / baccarat / craps ------------------------------
 
+export interface CasinoParticipant {
+  label: string;
+  is_host: boolean;
+  bankroll: number;
+  rounds_played: number;
+  has_pending_bets?: boolean;
+  open_bets?: number;
+}
+
 export interface CasinoSessionView {
   id: number;
   token?: string;
   game_type: string;
   room_code: string | null;
-  guest_tokens: Record<string, { label?: string }>;
+  guest_tokens: Record<string, unknown>;
   starting_bankroll: number;
   bankroll: number;
   rounds_played: number;
-  rules: Record<string, unknown>;
-  state: Record<string, unknown>;
+  rules: Record<string, any>;
+  state: Record<string, any>;
   history: Array<Record<string, unknown>>;
-  caller_is_host?: boolean;
+  caller_is_host: boolean;
+  caller_bankroll: number;
+  caller_pending_bets?: Array<Record<string, unknown>>;
+  caller_book?: Array<Record<string, unknown>>;
+  participants: CasinoParticipant[];
+}
+
+export interface CasinoSpinResult {
+  spin?: { pocket: string; color: string; is_zero: boolean };
+  round?: {
+    player_cards: Array<{ rank: string; suit: string }>;
+    banker_cards: Array<{ rank: string; suit: string }>;
+    player_total: number;
+    banker_total: number;
+    outcome: "player" | "banker" | "tie";
+    natural: boolean;
+    player_pair: boolean;
+    banker_pair: boolean;
+  };
+  roll?: { d1: number; d2: number; total: number; hard: boolean };
+  phase_after?: string;
+  point_after?: number | null;
+  participants: Array<{
+    label: string;
+    is_host: boolean;
+    total_profit: number;
+    bankroll_after: number;
+    payouts?: number[];
+    outcomes?: Array<{
+      bet_id: string;
+      profit: number;
+      resolved: boolean;
+      note: string;
+    }>;
+  }>;
 }
 
 export const Roulette = {
@@ -167,13 +210,15 @@ export const Roulette = {
     seed?: number;
   }) => http<CasinoSessionView>("POST", "/api/v1/roulette/sessions", body),
   me: () => http<CasinoSessionView>("GET", "/api/v1/roulette/sessions/me"),
-  spin: (bets: Array<{ bet_type: string; stake: number; selection?: unknown }>) =>
-    http<{
-      spin: { pocket: string; color: string; is_zero: boolean };
-      bets: Array<{ bet_type: string; stake: number; selection?: unknown }>;
-      payouts: number[];
-      total_profit: number;
-    }>("POST", "/api/v1/roulette/sessions/me/spin", { bets }),
+  stageBets: (bets: Array<{ bet_type: string; stake: number; selection?: unknown }>) =>
+    http<CasinoSessionView>("POST", "/api/v1/roulette/sessions/me/bets", { bets }),
+  spin: () => http<CasinoSpinResult>("POST", "/api/v1/roulette/sessions/me/spin", {}),
+  joinByCode: (code: string, body?: { label?: string; starting_bankroll?: number }) =>
+    http<{ token: string; room: CasinoSessionView }>(
+      "POST",
+      `/api/v1/roulette/sessions/by-code/${encodeURIComponent(code)}/join`,
+      body ?? {},
+    ),
   destroy: () => http<{ deleted: boolean }>("DELETE", "/api/v1/roulette/sessions/me"),
 };
 
@@ -186,21 +231,15 @@ export const Baccarat = {
     seed?: number;
   }) => http<CasinoSessionView>("POST", "/api/v1/baccarat/sessions", body),
   me: () => http<CasinoSessionView>("GET", "/api/v1/baccarat/sessions/me"),
-  play: (bets: Array<{ bet_type: string; stake: number }>) =>
-    http<{
-      round: {
-        player_cards: Array<{ rank: string; suit: string }>;
-        banker_cards: Array<{ rank: string; suit: string }>;
-        player_total: number;
-        banker_total: number;
-        outcome: "player" | "banker" | "tie";
-        natural: boolean;
-        player_pair: boolean;
-        banker_pair: boolean;
-      };
-      payouts: number[];
-      total_profit: number;
-    }>("POST", "/api/v1/baccarat/sessions/me/play", { bets }),
+  stageBets: (bets: Array<{ bet_type: string; stake: number }>) =>
+    http<CasinoSessionView>("POST", "/api/v1/baccarat/sessions/me/bets", { bets }),
+  play: () => http<CasinoSpinResult>("POST", "/api/v1/baccarat/sessions/me/play", {}),
+  joinByCode: (code: string, body?: { label?: string; starting_bankroll?: number }) =>
+    http<{ token: string; room: CasinoSessionView }>(
+      "POST",
+      `/api/v1/baccarat/sessions/by-code/${encodeURIComponent(code)}/join`,
+      body ?? {},
+    ),
   destroy: () => http<{ deleted: boolean }>("DELETE", "/api/v1/baccarat/sessions/me"),
 };
 
@@ -217,28 +256,34 @@ export const Craps = {
     stake: number;
     selection?: number;
   }>) =>
-    http<Record<string, unknown>>("POST", "/api/v1/craps/sessions/me/bets", { bets }),
+    http<CasinoSessionView>("POST", "/api/v1/craps/sessions/me/bets", { bets }),
   cancelBet: (betId: string) =>
-    http<Record<string, unknown>>(
+    http<CasinoSessionView>(
       "DELETE",
       `/api/v1/craps/sessions/me/bets/${encodeURIComponent(betId)}`,
     ),
   roll: (dice?: [number, number]) =>
-    http<{
-      roll: { d1: number; d2: number; total: number; hard: boolean };
-      phase_before: string;
-      phase_after: string;
-      point_before: number | null;
-      point_after: number | null;
-      outcomes: Array<{
-        bet_id: string;
-        profit: number;
-        resolved: boolean;
-        note: string;
-      }>;
-      total_profit: number;
-    }>("POST", "/api/v1/craps/sessions/me/roll", dice ? { dice } : {}),
+    http<CasinoSpinResult>(
+      "POST",
+      "/api/v1/craps/sessions/me/roll",
+      dice ? { dice } : {},
+    ),
+  joinByCode: (code: string, body?: { label?: string; starting_bankroll?: number }) =>
+    http<{ token: string; room: CasinoSessionView }>(
+      "POST",
+      `/api/v1/craps/sessions/by-code/${encodeURIComponent(code)}/join`,
+      body ?? {},
+    ),
   destroy: () => http<{ deleted: boolean }>("DELETE", "/api/v1/craps/sessions/me"),
+};
+
+export const Seat = {
+  setBet: (bet: number) =>
+    http<{ seat_num: number; bet: number }>(
+      "POST",
+      "/api/v1/sessions/me/seat/bet",
+      { bet },
+    ),
 };
 
 // ---- rounds -----------------------------------------------------------

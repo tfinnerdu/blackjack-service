@@ -6,7 +6,7 @@ import { CoachPanel } from "../components/CoachPanel";
 import { Dealer } from "../components/Dealer";
 import { RoundSummary } from "../components/RoundSummary";
 import { SeatBlock, SeatPresenceDot } from "../components/Seat";
-import { ApiError, Rounds, Sessions } from "../lib/api";
+import { ApiError, Rounds, Seat, Sessions } from "../lib/api";
 import { useApp } from "../lib/store";
 import type { SessionView } from "../lib/types";
 
@@ -238,11 +238,14 @@ export default function Play() {
         </div>
       ) : null}
 
-      {/* Guests don't control deals in MVP — host runs the table. */}
+      {/* Guest bet picker — set my own bet for the next round. */}
       {!round && !isHost && (
-        <div className="mt-auto rounded-xl bg-felt p-3 text-center text-sm text-white/70">
-          Waiting for the host to deal the next round…
-        </div>
+        <GuestBetPanel
+          session={session}
+          onUpdated={(bet) =>
+            setSession({ ...session, caller_seat_bet: bet } as SessionView)
+          }
+        />
       )}
 
       {/* Pre-deal bet panel — host only, when no round AND bankroll is healthy */}
@@ -286,6 +289,74 @@ export default function Play() {
           </button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function GuestBetPanel({
+  session,
+  onUpdated,
+}: {
+  session: SessionView;
+  onUpdated: (bet: number) => void;
+}) {
+  // Guest's chosen bet for the next round. Defaults to whatever the
+  // server has stored, falling back to the AI seat's base_bet so the
+  // initial value matches what'll actually be wagered.
+  const callerSeat = session.caller_seat ?? 0;
+  const aiSeat = session.ai_seats.find((a) => a.seat_num === callerSeat);
+  const stored = session.caller_seat_bet ?? aiSeat?.base_bet ?? session.rules.min_bet;
+  const [bet, setBet] = useState<number>(stored);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const min = session.rules.min_bet;
+  const max = session.rules.max_bet;
+  const inc = session.rules.bet_increment;
+
+  async function commit(value: number) {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await Seat.setBet(value);
+      onUpdated(r.bet);
+    } catch (e) {
+      setErr(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-auto rounded-xl bg-felt p-3 space-y-2">
+      <div className="text-xs uppercase tracking-wide text-white/60">
+        Your bet for the next round
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setBet((b) => Math.max(min, b - inc))}
+          className="min-w-[44px] min-h-touch rounded-lg border border-white/20 text-xl"
+        >
+          −
+        </button>
+        <div className="flex-1 text-center font-mono text-xl">${bet}</div>
+        <button
+          onClick={() => setBet((b) => Math.min(max, b + inc))}
+          className="min-w-[44px] min-h-touch rounded-lg border border-white/20 text-xl"
+        >
+          +
+        </button>
+      </div>
+      <button
+        onClick={() => commit(bet)}
+        disabled={busy || bet < min || bet > max}
+        className="w-full min-h-touch rounded-xl border border-white/20 text-sm disabled:opacity-30"
+      >
+        {busy ? "Saving…" : "Save my bet"}
+      </button>
+      {err && <div className="text-red-300 text-xs">{err}</div>}
+      <div className="text-[11px] text-white/50 text-center">
+        Host triggers the deal. Your saved bet will be used for your seat.
+      </div>
     </div>
   );
 }

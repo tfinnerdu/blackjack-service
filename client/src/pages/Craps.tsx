@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { ApiError, CasinoSessionView, Craps as CrapsApi } from "../lib/api";
+import {
+  ApiError,
+  CasinoParticipant,
+  CasinoSessionView,
+  Craps as CrapsApi,
+} from "../lib/api";
 
 interface BookBet {
   bet_id: string;
@@ -28,10 +33,8 @@ export default function Craps() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unitBet, setUnitBet] = useState(5);
-  const [lastRoll, setLastRoll] = useState<{
-    d1: number; d2: number; total: number; profit: number;
-    phase_after: string; point_after: number | null;
-  } | null>(null);
+  const [lastRoll, setLastRoll] = useState<any>(null);
+  const [joinCode, setJoinCode] = useState("");
 
   useEffect(() => {
     CrapsApi.me()
@@ -42,19 +45,43 @@ export default function Craps() {
       .finally(() => setLoading(false));
   }, []);
 
-  const tableState = (session?.state ?? {}) as any;
-  const phase = tableState.table?.phase ?? "come_out";
-  const point = tableState.table?.point ?? null;
-  const book: BookBet[] = tableState.bets ?? [];
+  // Live polling.
+  useEffect(() => {
+    if (!session?.room_code) return;
+    const id = window.setInterval(async () => {
+      try {
+        const next = await CrapsApi.me();
+        setSession(next);
+      } catch { /* ignore */ }
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [session?.room_code]);
+
+  const phase = (session?.state as any)?.table?.phase ?? "come_out";
+  const point = (session?.state as any)?.table?.point ?? null;
+  const book: BookBet[] = ((session?.caller_book ?? []) as unknown) as BookBet[];
   const onTableTotal = book.reduce((s, b) => s + b.stake, 0);
 
   async function startSession() {
     setBusy(true);
     setError(null);
     try {
-      const sess = await CrapsApi.create({
-        starting_bankroll: 500, min_bet: 1, max_bet: 500,
-      });
+      const sess = await CrapsApi.create({ starting_bankroll: 500 });
+      setSession(sess);
+    } catch (e) {
+      setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function joinRoom() {
+    if (!joinCode.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await CrapsApi.joinByCode(joinCode.trim().toUpperCase(), {});
+      const sess = await CrapsApi.me();
       setSession(sess);
     } catch (e) {
       setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
@@ -92,14 +119,7 @@ export default function Craps() {
     setError(null);
     try {
       const result = await CrapsApi.roll();
-      setLastRoll({
-        d1: result.roll.d1,
-        d2: result.roll.d2,
-        total: result.roll.total,
-        profit: result.total_profit,
-        phase_after: result.phase_after,
-        point_after: result.point_after,
-      });
+      setLastRoll(result);
       const next = await CrapsApi.me();
       setSession(next);
     } catch (e) {
@@ -127,8 +147,8 @@ export default function Craps() {
         <Link to="/" className="text-white/60 text-sm">← home</Link>
         <h1 className="text-2xl font-bold">Craps</h1>
         <p className="text-sm text-white/70">
-          Pass / Don't Pass + Come / Don't Come, Place numbers, Field,
-          one-roll props, hardways. Bankroll starts at $500.
+          Pass / Don't Pass + odds + Come / Don't Come + Place + Field + props
+          + Hardways. Bankroll starts at $500.
         </p>
         <button
           onClick={startSession}
@@ -137,10 +157,34 @@ export default function Craps() {
         >
           Belly up to the table
         </button>
+        <div className="rounded-xl bg-felt p-3 space-y-2">
+          <div className="text-xs uppercase tracking-wide text-white/60">
+            Or join a friend's room
+          </div>
+          <div className="flex gap-2">
+            <input
+              autoCapitalize="characters"
+              placeholder="ABC234"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 6))}
+              className="flex-1 min-h-touch rounded-lg bg-felt-dark text-white font-mono px-3"
+            />
+            <button
+              onClick={joinRoom}
+              disabled={busy || joinCode.length < 4}
+              className="min-h-touch px-4 rounded-lg border border-white/20 text-sm disabled:opacity-30"
+            >
+              Join
+            </button>
+          </div>
+        </div>
         {error && <div className="text-red-300 text-sm">{error}</div>}
       </div>
     );
   }
+
+  const isHost = session.caller_is_host;
+  const callerBankroll = session.caller_bankroll;
 
   return (
     <div className="min-h-screen px-3 py-3 flex flex-col gap-3"
@@ -151,11 +195,20 @@ export default function Craps() {
       <div className="flex items-center justify-between">
         <Link to="/" className="text-white/60 text-sm">←</Link>
         <div className="text-center">
-          <div className="text-xs text-white/50">Bankroll</div>
-          <div className="font-mono text-xl">${session.bankroll}</div>
+          <div className="text-xs text-white/50">{isHost ? "Bankroll" : "Your bankroll"}</div>
+          <div className="font-mono text-xl">${callerBankroll}</div>
         </div>
-        <button onClick={endSession} className="text-white/60 text-xs underline">end</button>
+        <button onClick={endSession} className="text-white/60 text-xs underline">
+          {isHost ? "end" : "leave"}
+        </button>
       </div>
+
+      {session.room_code && (
+        <div className="rounded-xl bg-felt p-2 text-center text-xs">
+          Room <span className="font-mono text-base tracking-widest">{session.room_code}</span>
+          {" · "}{session.participants.length} player{session.participants.length === 1 ? "" : "s"}
+        </div>
+      )}
 
       <div className="rounded-xl bg-felt p-3 text-center">
         <div className="text-xs uppercase tracking-wide text-white/60">
@@ -164,14 +217,22 @@ export default function Craps() {
         {lastRoll && (
           <>
             <div className="font-mono text-3xl mt-1">
-              {lastRoll.d1} + {lastRoll.d2} = {lastRoll.total}
+              {lastRoll.roll.d1} + {lastRoll.roll.d2} = {lastRoll.roll.total}
             </div>
-            <div className={`text-sm ${lastRoll.profit >= 0 ? "text-emerald-300" : "text-red-300"}`}>
-              {lastRoll.profit >= 0 ? "+" : ""}${lastRoll.profit}
+            <div className="text-xs text-white/70 mt-1">
+              {(lastRoll.participants ?? []).map((p: any, i: number) => (
+                <span key={i} className="mx-1">
+                  {p.label}: <span className={p.total_profit >= 0 ? "text-emerald-300" : "text-red-300"}>
+                    {p.total_profit >= 0 ? "+" : ""}${p.total_profit}
+                  </span>
+                </span>
+              ))}
             </div>
           </>
         )}
       </div>
+
+      <ParticipantsList participants={session.participants} />
 
       <div className="rounded-xl bg-felt p-3 space-y-2">
         <div className="text-xs uppercase tracking-wide text-white/60">Bet unit</div>
@@ -204,9 +265,7 @@ export default function Craps() {
       </div>
 
       <div className="rounded-xl bg-felt p-3 space-y-2">
-        <div className="text-xs uppercase tracking-wide text-white/60">
-          Place numbers
-        </div>
+        <div className="text-xs uppercase tracking-wide text-white/60">Place numbers</div>
         <div className="grid grid-cols-6 gap-1">
           {PLACE_NUMBERS.map((n) => (
             <button
@@ -221,9 +280,7 @@ export default function Craps() {
       </div>
 
       <div className="rounded-xl bg-felt p-3 space-y-2">
-        <div className="text-xs uppercase tracking-wide text-white/60">
-          Hardways
-        </div>
+        <div className="text-xs uppercase tracking-wide text-white/60">Hardways</div>
         <div className="grid grid-cols-4 gap-1">
           {HARD_NUMBERS.map((n) => (
             <button
@@ -251,12 +308,7 @@ export default function Craps() {
               </span>
               <span className="flex items-center gap-2">
                 <span className="font-mono">${b.stake}</span>
-                <button
-                  onClick={() => cancelBet(b.bet_id)}
-                  className="text-white/40 text-xs"
-                >
-                  ✕
-                </button>
+                <button onClick={() => cancelBet(b.bet_id)} className="text-white/40 text-xs">✕</button>
               </span>
             </div>
           ))}
@@ -265,13 +317,40 @@ export default function Craps() {
 
       {error && <div className="text-red-300 text-sm">{error}</div>}
 
-      <button
-        onClick={rollDice}
-        disabled={busy || book.length === 0}
-        className="mt-auto w-full min-h-touch rounded-xl bg-white text-felt-dark font-semibold disabled:opacity-40"
-      >
-        {busy ? "Rolling…" : book.length === 0 ? "Place a bet first" : "Roll the dice"}
-      </button>
+      {isHost ? (
+        <button
+          onClick={rollDice}
+          disabled={busy}
+          className="mt-auto w-full min-h-touch rounded-xl bg-white text-felt-dark font-semibold disabled:opacity-40"
+        >
+          {busy ? "Rolling…" : "Roll the dice"}
+        </button>
+      ) : (
+        <div className="mt-auto w-full rounded-xl bg-felt p-3 text-center text-sm text-white/60">
+          Waiting for the shooter to roll…
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ParticipantsList({ participants }: { participants: CasinoParticipant[] }) {
+  if (participants.length <= 1) return null;
+  return (
+    <div className="rounded-xl bg-felt p-2 space-y-1">
+      <div className="text-xs uppercase tracking-wide text-white/60">At the table</div>
+      {participants.map((p, i) => (
+        <div key={i} className="flex items-center justify-between text-sm">
+          <span>
+            <span className={p.is_host ? "text-amber-300" : "text-emerald-300"}>●</span>
+            {" "}{p.label}{p.is_host && <span className="text-white/40 text-xs"> · host</span>}
+          </span>
+          <span className="font-mono">
+            ${p.bankroll}
+            {p.open_bets ? <span className="ml-2 text-emerald-300 text-xs">{p.open_bets} bet{p.open_bets === 1 ? "" : "s"}</span> : null}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

@@ -645,7 +645,15 @@ def start_round(sess: GameSession, req: StartRoundRequest) -> RoundView:
         true_count_now = sess.running_count / decks_remaining
 
     claimed_seats = json.loads(sess.seat_tokens_json or "{}")
-    claimed_seat_nums = {int(k) for k in claimed_seats.keys()}
+    # Map seat_num -> guest's chosen bet (None if they haven't picked).
+    from .sessions import _claim_bet, _claim_token
+    claim_bets: dict[int, Optional[int]] = {}
+    claimed_seat_nums: set[int] = set()
+    for seat_num_str, value in claimed_seats.items():
+        if _claim_token(value):
+            n = int(seat_num_str)
+            claimed_seat_nums.add(n)
+            claim_bets[n] = _claim_bet(value)
 
     for seat_num in sorted(set(list(ai_seats.keys()) + [sess.player_seat])):
         if seat_num == sess.player_seat:
@@ -659,11 +667,13 @@ def start_round(sess: GameSession, req: StartRoundRequest) -> RoundView:
             ))
             continue
         ai = ai_seats[seat_num]
-        # A guest claim converts an AI seat to human-controlled. The
-        # bot's `base_bet` is used as the table bet; per-guest bet
-        # control is a future enhancement.
+        # A guest claim converts an AI seat to human-controlled. Their
+        # preferred bet (set via the per-guest endpoint) wins; otherwise
+        # we fall back to the bot's base_bet so the seat still plays.
         if seat_num in claimed_seat_nums:
-            bet = max(rules.min_bet, min(ai.base_bet, ai.bankroll, rules.max_bet))
+            requested = claim_bets.get(seat_num)
+            target = requested if requested is not None else ai.base_bet
+            bet = max(rules.min_bet, min(int(target), ai.bankroll, rules.max_bet))
             if bet <= 0 or ai.bankroll < rules.min_bet:
                 continue  # claimed but bust — sits out this round
             rnd.add_seat(Seat(
