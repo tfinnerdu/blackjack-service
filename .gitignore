@@ -30,3 +30,4 @@ app/static/
 .idea/
 .DS_Store
 /.vs
+.vs/

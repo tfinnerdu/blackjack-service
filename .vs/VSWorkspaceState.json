@@ -2,8 +2,14 @@
   "ExpandedNodes": [
     "",
     "\\app",
+    "\\app\\ai",
+    "\\app\\counting",
+    "\\app\\engine",
+    "\\app\\models",
+    "\\app\\poker",
+    "\\app\\poker\\ai",
     "\\client"
   ],
-  "SelectedNode": "\\claude.md",
+  "SelectedNode": "\\card-games.pyproj",
   "PreviewInSolutionExplorer": false
 }
