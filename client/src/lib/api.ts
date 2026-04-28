@@ -37,9 +37,27 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
 
 // ---- templates ---------------------------------------------------------
 
+export interface SaveTemplateBody {
+  game_type?: string;
+  name: string;
+  description?: string;
+  rules: Record<string, unknown>;
+  side_bets: Record<string, unknown>;
+}
+
 export const Templates = {
-  list: () => http<{ templates: TemplateView[] }>("GET", "/api/v1/templates"),
+  list: (gameType?: string) =>
+    http<{ templates: TemplateView[] }>(
+      "GET",
+      gameType ? `/api/v1/templates?game_type=${encodeURIComponent(gameType)}` : "/api/v1/templates",
+    ),
   get: (id: number) => http<TemplateView>("GET", `/api/v1/templates/${id}`),
+  create: (body: SaveTemplateBody) =>
+    http<TemplateView>("POST", "/api/v1/templates", body),
+  update: (id: number, body: Partial<SaveTemplateBody>) =>
+    http<TemplateView>("PATCH", `/api/v1/templates/${id}`, body),
+  destroy: (id: number) =>
+    http<void>("DELETE", `/api/v1/templates/${id}`),
 };
 
 // ---- sessions ---------------------------------------------------------

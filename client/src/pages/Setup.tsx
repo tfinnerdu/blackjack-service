@@ -26,9 +26,12 @@ export default function Setup() {
   const [aiByseat, setAiBySeat] = useState<Record<number, { playstyle: string; bet_pattern: string; base_bet: number }>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorJson, setEditorJson] = useState("");
+  const [editorError, setEditorError] = useState<string | null>(null);
 
   useEffect(() => {
-    Templates.list()
+    Templates.list("blackjack")
       .then((d) => {
         setTemplates(d.templates);
         const builtin = d.templates.find((t) => t.is_builtin);
@@ -95,6 +98,107 @@ export default function Setup() {
     }
   }
 
+  function refreshTemplates() {
+    return Templates.list("blackjack")
+      .then((d) => setTemplates(d.templates))
+      .catch((e) => setError(String(e)));
+  }
+
+  function openEditorBlank() {
+    setEditorJson(
+      JSON.stringify(
+        {
+          name: "My Custom Blackjack Rules",
+          description: "",
+          rules: {
+            decks: 6,
+            shuffle_mode: "casino",
+            penetration: 0.75,
+            seats: 5,
+            player_seat: 3,
+            dealer_hits_soft_17: true,
+            dealer_peeks: true,
+            blackjack_payout: [3, 2],
+            insurance_payout: [2, 1],
+            double_rule: "any2",
+            double_after_split: true,
+            max_splits: 3,
+            resplit_aces: false,
+            hit_split_aces: false,
+            surrender: "late",
+            insurance_offered: true,
+            starting_bankroll: 500,
+            min_bet: 5,
+            max_bet: 500,
+            bet_increment: 5,
+          },
+          side_bets: {},
+        },
+        null,
+        2,
+      ),
+    );
+    setEditorError(null);
+    setEditorOpen(true);
+  }
+
+  function openEditorClone() {
+    if (!selectedTemplate) return;
+    const clone = {
+      name: `${selectedTemplate.name} (copy)`,
+      description: selectedTemplate.description,
+      rules: selectedTemplate.rules,
+      side_bets: selectedTemplate.side_bets,
+    };
+    setEditorJson(JSON.stringify(clone, null, 2));
+    setEditorError(null);
+    setEditorOpen(true);
+  }
+
+  async function saveTemplate() {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(editorJson);
+    } catch {
+      setEditorError("invalid JSON");
+      return;
+    }
+    if (!parsed.name) {
+      setEditorError("name required");
+      return;
+    }
+    try {
+      const saved = await Templates.create({
+        game_type: "blackjack",
+        name: parsed.name,
+        description: parsed.description ?? "",
+        rules: parsed.rules ?? {},
+        side_bets: parsed.side_bets ?? {},
+      });
+      await refreshTemplates();
+      setTemplateId(saved.id);
+      setEditorOpen(false);
+    } catch (e) {
+      setEditorError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+    }
+  }
+
+  async function deleteSelectedTemplate() {
+    if (!selectedTemplate || selectedTemplate.is_builtin) return;
+    if (!confirm(`Delete "${selectedTemplate.name}"?`)) return;
+    try {
+      await Templates.destroy(selectedTemplate.id);
+      await refreshTemplates();
+      // Pick the first remaining built-in.
+      const builtin = templates.find(
+        (t) => t.is_builtin && t.id !== selectedTemplate.id,
+      );
+      setTemplateId(builtin?.id ?? null);
+    } catch (e) {
+      setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+    }
+  }
+
   return (
     <div
       className="min-h-screen px-4 py-6"
@@ -119,6 +223,28 @@ export default function Setup() {
           {selectedTemplate && (
             <p className="text-xs text-white/60 mt-2">{selectedTemplate.description}</p>
           )}
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            <button
+              onClick={openEditorBlank}
+              className="min-h-touch rounded-lg border border-white/20 text-xs"
+            >
+              + New
+            </button>
+            <button
+              onClick={openEditorClone}
+              disabled={!selectedTemplate}
+              className="min-h-touch rounded-lg border border-white/20 text-xs disabled:opacity-40"
+            >
+              Clone
+            </button>
+            <button
+              onClick={deleteSelectedTemplate}
+              disabled={!selectedTemplate || selectedTemplate.is_builtin}
+              className="min-h-touch rounded-lg border border-red-300/40 text-red-200 text-xs disabled:opacity-30"
+            >
+              Delete
+            </button>
+          </div>
         </Section>
 
         <Section title="Bankroll">
@@ -208,6 +334,72 @@ export default function Setup() {
         >
           {submitting ? "Starting…" : "Deal me in"}
         </button>
+      </div>
+
+      {editorOpen && (
+        <TemplateEditorSheet
+          json={editorJson}
+          onJsonChange={setEditorJson}
+          onSave={saveTemplate}
+          onClose={() => setEditorOpen(false)}
+          error={editorError}
+        />
+      )}
+    </div>
+  );
+}
+
+function TemplateEditorSheet({
+  json,
+  onJsonChange,
+  onSave,
+  onClose,
+  error,
+}: {
+  json: string;
+  onJsonChange: (s: string) => void;
+  onSave: () => void;
+  onClose: () => void;
+  error: string | null;
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
+      <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
+        <div className="flex items-center justify-between">
+          <div className="text-lg font-semibold">Edit blackjack rules</div>
+          <button onClick={onClose} className="text-white/60 text-lg">✕</button>
+        </div>
+        <p className="text-xs text-white/60">
+          Edit name + rules JSON. Required: name, rules. side_bets is optional
+          (toggle individual side bet rules inside its dict).
+        </p>
+        <textarea
+          value={json}
+          onChange={(e) => onJsonChange(e.target.value)}
+          spellCheck={false}
+          className="flex-1 rounded-lg bg-felt-dark text-white p-2 font-mono text-xs"
+        />
+        {error && <div className="text-red-300 text-sm">{error}</div>}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onClose}
+            className="min-h-touch rounded-xl border border-white/20"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            className="min-h-touch rounded-xl bg-white text-felt-dark font-semibold"
+          >
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );
