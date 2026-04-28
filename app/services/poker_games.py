@@ -238,6 +238,14 @@ def _hand_to_dict(rnd: HoldemRound, *, shoe_seed: int, cards_dealt: int) -> dict
             }
             for p in rnd.players
         ],
+        # Triggered wilds: persist the community-position indices that
+        # were dynamically marked, plus any pending count from a trigger
+        # whose 'next' card hasn't landed yet. On restore we map indices
+        # back to fresh Card object ids in the new community list.
+        "dynamic_wild_indices": [
+            i for i, c in enumerate(rnd.community) if id(c) in rnd._dynamic_wild_ids
+        ],
+        "pending_wild_count": rnd._pending_wild_count,
     }
 
 
@@ -276,6 +284,16 @@ def _hand_from_dict(d: dict, sess: PokerSession) -> HoldemRound:
         int(seat): [poker_card_from_token(t) for t in tokens]
         for seat, tokens in d["holes"].items()
     }
+    # Triggered wilds: rebuild the dynamic-wild-id set + pending counter.
+    # Object ids are per-process; we persist community-position indices and
+    # resolve back here using the freshly-rebuilt community list.
+    dynamic_indices = d.get("dynamic_wild_indices", [])
+    rnd._dynamic_wild_ids = {
+        id(rnd.community[i])
+        for i in dynamic_indices
+        if 0 <= i < len(rnd.community)
+    }
+    rnd._pending_wild_count = int(d.get("pending_wild_count", 0))
     # Restore pot state.
     rnd.pot.committed = {int(k): int(v) for k, v in d["pot_committed"].items()}
     rnd.pot.total = int(d["pot_total"])

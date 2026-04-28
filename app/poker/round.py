@@ -68,26 +68,54 @@ class RoundResult:
     winner_seats: list[int] = field(default_factory=list)
 
 
-def _is_marked_wild(card: PokerCard, rules: list[WildRule]) -> bool:
-    """Cheap variant-aware 'is this card wild' check."""
+def _is_marked_wild(
+    card: PokerCard,
+    rules: list[WildRule],
+    dynamic_wild_ids: Optional[set[int]] = None,
+) -> bool:
+    """Cheap 'is this card wild' check. Honors variant rule matches AND
+    any dynamically-marked card-instance IDs (AFTER_RANK triggers)."""
     from .companion import _matches  # reuse the matcher logic in companion
-    return any(_matches(card, r) for r in rules)
+    if dynamic_wild_ids is not None and id(card) in dynamic_wild_ids:
+        return True
+    # AFTER_RANK rules are deal-time only; static rules (joker / rank /
+    # suit / specific) are still match-based.
+    return any(
+        _matches(card, r) for r in rules
+        if r.kind != WildKind.AFTER_RANK
+    )
 
 
-def _showdown_rank(cards: list[PokerCard], variant: VariantSpec) -> HandRank:
+def _showdown_rank(
+    cards: list[PokerCard],
+    variant: VariantSpec,
+    dynamic_wild_ids: Optional[set[int]] = None,
+) -> HandRank:
     """Best high hand for this variant respecting wild rules + must-use."""
     wild_indices_in_hand = [
-        i for i, c in enumerate(cards) if _is_marked_wild(c, variant.wilds)
+        i for i, c in enumerate(cards)
+        if _is_marked_wild(c, variant.wilds, dynamic_wild_ids)
     ]
     if not wild_indices_in_hand:
         return best_high(cards)
 
     # With wilds: try every 5-card combo, evaluate with wilds when needed.
     from itertools import combinations
-    mode = variant.wilds[0].mode if variant.wilds else WildMode.FULLY_WILD
+    # Pick the strictest mode declared in any matching variant rule;
+    # AFTER_RANK rules also contribute their mode.
+    modes = {r.mode for r in variant.wilds}
+    if WildMode.STRAIGHT_FLUSH_ONLY in modes:
+        mode = WildMode.STRAIGHT_FLUSH_ONLY
+    elif WildMode.BUG in modes:
+        mode = WildMode.BUG
+    else:
+        mode = WildMode.FULLY_WILD
     best: Optional[HandRank] = None
     for combo in combinations(cards, 5):
-        wild_in_combo = [i for i, c in enumerate(combo) if _is_marked_wild(c, variant.wilds)]
+        wild_in_combo = [
+            i for i, c in enumerate(combo)
+            if _is_marked_wild(c, variant.wilds, dynamic_wild_ids)
+        ]
         if wild_in_combo:
             rank = evaluate_with_wilds(list(combo), wild_indices=wild_in_combo, mode=mode)
         else:
@@ -150,6 +178,14 @@ class HoldemRound:
         self._action_started_this_street: bool = False
         # Stacks captured BEFORE blinds + commits so profit math is honest.
         self._starting_stacks: dict[int, int] = {}
+        # Triggered wilds: card object IDs that were dynamically marked
+        # wild by deal-time rules (e.g. AFTER_RANK 'follow the queen').
+        # The showdown evaluator unions this with the variant's static
+        # wild rules.
+        self._dynamic_wild_ids: set[int] = set()
+        # Pending count of 'next N community cards become wild' from the
+        # most-recent trigger. Decrements as cards are dealt.
+        self._pending_wild_count: int = 0
 
     # ---- setup ---------------------------------------------------------
 
@@ -367,7 +403,26 @@ class HoldemRound:
         if self.shoe.cards_remaining > 0:
             self.shoe.next_card()
         for _ in range(n):
-            self.community.append(self.shoe.next_card())
+            card = self.shoe.next_card()
+            self.community.append(card)
+            self._apply_after_rank_trigger(card)
+
+    def _apply_after_rank_trigger(self, card: PokerCard) -> None:
+        """Run AFTER_RANK rules against a freshly-dealt community card.
+
+        First, if a previous card said 'next N are wild', mark THIS card
+        and decrement. Then, if THIS card matches an AFTER_RANK trigger,
+        queue up next_count more wilds.
+        """
+        from .cards import Joker as _Joker
+        if self._pending_wild_count > 0:
+            self._dynamic_wild_ids.add(id(card))
+            self._pending_wild_count -= 1
+        if isinstance(card, _Joker):
+            return
+        for rule in self.variant.wilds:
+            if rule.kind == WildKind.AFTER_RANK and rule.rank == card.rank:
+                self._pending_wild_count += int(rule.next_count or 1)
 
     # ---- settlement ---------------------------------------------------
 
@@ -392,7 +447,9 @@ class HoldemRound:
                     board=self.community,
                 )
             else:
-                ranks[seat] = _showdown_rank(cards, self.variant)
+                ranks[seat] = _showdown_rank(
+                    cards, self.variant, self._dynamic_wild_ids,
+                )
 
         # Settle each side pot to the strongest live player among the eligible.
         starting_stacks = self._starting_stacks
