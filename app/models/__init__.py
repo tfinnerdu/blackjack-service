@@ -197,6 +197,58 @@ class GameSession(db.Model):
         }
 
 
+class PokerSession(db.Model):
+    """One ongoing poker simulator table. Holds the variant + bot configs +
+    chip stacks; the in-flight hand state lives in active_hand_json (set
+    while a hand is being played, cleared when it settles).
+
+    Anonymous-token auth same as GameSession (blackjack). A user can have
+    one of each kind in their cookie via separate token columns later;
+    for now poker uses a separate cookie.
+    """
+    __tablename__ = "poker_session"
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), nullable=False, unique=True, default=_new_token)
+
+    template_id = db.Column(
+        db.Integer,
+        db.ForeignKey("settings_template.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    variant_json = db.Column(db.Text, nullable=False)
+    config_json = db.Column(db.Text, nullable=False)   # blinds + initial stacks
+    seats_json = db.Column(db.Text, nullable=False)    # players + bots + stacks
+    dealer_seat = db.Column(db.Integer, nullable=False, default=1)
+    active_hand_json = db.Column(db.Text, nullable=True)
+    hands_played = db.Column(db.Integer, nullable=False, default=0)
+    starting_bankroll = db.Column(db.Integer, nullable=False)
+
+    created_at = db.Column(db.DateTime(timezone=True), default=_utcnow, nullable=False)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        default=_utcnow,
+        onupdate=_utcnow,
+        nullable=False,
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "token": self.token,
+            "template_id": self.template_id,
+            "variant": json.loads(self.variant_json),
+            "config": json.loads(self.config_json),
+            "seats": json.loads(self.seats_json),
+            "dealer_seat": self.dealer_seat,
+            "active_hand": json.loads(self.active_hand_json) if self.active_hand_json else None,
+            "hands_played": self.hands_played,
+            "starting_bankroll": self.starting_bankroll,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 def _ensure_columns() -> None:
     """Idempotent boot migrations. Add columns that older deployments are
     missing. We're not running alembic yet, so this stays inline."""
