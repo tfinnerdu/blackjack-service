@@ -285,7 +285,39 @@ analytics rollup.
 - Prop-bet markets (player points, etc.) — needs a richer market
   schema.
 
-### 10. Lower-priority parking lot — three of four landed earlier
+### 10. ✅ Casino visuals — dice, wheel, craps layout, felt tables
+
+Frontend polish that gives each casino game its own physical-feel
+visual:
+
+- **`Dice.tsx`** — two SVG dice with proper pip layouts for 1-6.
+  When `rolling=true` the displayed values cycle every 100ms and a
+  CSS keyframe (`die-tumble` in `index.css`) tumbles each die
+  through 2.5 turns over 1s before snapping to the engine's actual
+  result.
+- **`RouletteWheel.tsx`** — 37/38 colored pocket segments arranged
+  in a circle in the canonical casino sequence (not numerical).
+  Pockets render correctly red/black/green per the standard table.
+  The wheel rotates CSS-transition-style 5+ turns to land with the
+  winning pocket at 12 o'clock under a fixed pointer; the ball
+  spins the opposite direction at 4 turns.
+- **`CrapsTable.tsx`** — felt-styled grid layout: Come (full width),
+  Place numbers row (4-10), Field bar, Hardways row, Pass / Don't
+  Pass split, Any 7 / Any Craps props. Each zone is a tappable bet
+  region that shows a chip stack when occupied; the chip color
+  reflects amount (sky for $1, rose for $5, emerald for $25, black
+  for $100+ — casino convention). ✕ on each zone cancels the most-
+  recent bet there.
+- **`TableSurface.tsx`** — shared felt wrapper used by Play.tsx
+  (blackjack) and PokerTable.tsx (poker simulator). Wood-tone rail
+  ring + green felt with a radial vignette so the center reads
+  brighter than the edges.
+
+Wired to use the engines' actual results: dice values, wheel
+pocket, and craps phase / book all flow from the API; the UI just
+animates and lays them out.
+
+### 11. Lower-priority parking lot — three of four landed earlier
 
 - **✅ Stud bring-in mechanics**: 3rd-street lowest up-card brings in
   (highest in Razz), suit tie-break C < D < H < S. 4th-street onward

@@ -22,3 +22,30 @@ body {
   /* No bounce / overscroll on the table view. */
   overscroll-behavior: none;
 }
+
+/* Craps: a brief tumble for the dice on each roll. The actual pip
+   values are cycled in JS during the animation — this just sells the
+   physical motion. */
+@keyframes die-tumble {
+  0%   { transform: rotate(0deg)   scale(1); }
+  20%  { transform: rotate(220deg) scale(1.10); }
+  40%  { transform: rotate(440deg) scale(0.92); }
+  60%  { transform: rotate(660deg) scale(1.06); }
+  80%  { transform: rotate(820deg) scale(0.97); }
+  100% { transform: rotate(900deg) scale(1); }
+}
+.animate-die-tumble {
+  animation: die-tumble 1s ease-out;
+}
+
+/* Roulette wheel + ball spins. The wheel rotates 4-5 full turns then
+   eases into the winning pocket position; the ball turns the other
+   way before snapping. The exact end-position angles are set inline
+   per-spin (different per outcome), so these keyframes are just the
+   rotation envelopes. The component computes the final transform. */
+.animate-wheel-spin {
+  transition: transform 3.5s cubic-bezier(0.15, 0.45, 0.05, 1);
+}
+.animate-ball-spin {
+  transition: transform 3.5s cubic-bezier(0.10, 0.50, 0.05, 1);
+}

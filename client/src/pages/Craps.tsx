@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { CrapsTable } from "../components/CrapsTable";
+import { Dice } from "../components/Dice";
 import {
   ApiError,
   CasinoParticipant,
@@ -16,17 +18,6 @@ interface BookBet {
   established_point?: number | null;
 }
 
-const SIMPLE_BETS: { bet_type: string; label: string; phaseHint: string }[] = [
-  { bet_type: "pass_line", label: "Pass Line", phaseHint: "1:1" },
-  { bet_type: "dont_pass", label: "Don't Pass", phaseHint: "1:1, 12 push" },
-  { bet_type: "field", label: "Field", phaseHint: "2/3/4/9/10/11/12" },
-  { bet_type: "any_seven", label: "Any 7", phaseHint: "4:1 one-roll" },
-  { bet_type: "any_craps", label: "Any Craps", phaseHint: "7:1 one-roll" },
-];
-
-const PLACE_NUMBERS = [4, 5, 6, 8, 9, 10];
-const HARD_NUMBERS = [4, 6, 8, 10];
-
 export default function Craps() {
   const [session, setSession] = useState<CasinoSessionView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,6 +25,7 @@ export default function Craps() {
   const [error, setError] = useState<string | null>(null);
   const [unitBet, setUnitBet] = useState(5);
   const [lastRoll, setLastRoll] = useState<any>(null);
+  const [diceRolling, setDiceRolling] = useState(false);
   const [joinCode, setJoinCode] = useState("");
 
   useEffect(() => {
@@ -117,13 +109,20 @@ export default function Craps() {
     if (!session) return;
     setBusy(true);
     setError(null);
+    setDiceRolling(true);
     try {
       const result = await CrapsApi.roll();
+      // Hold the tumble animation for the full ~1s even if the API
+      // responds faster; otherwise the dice flicker.
+      const animationPromise = new Promise((res) => window.setTimeout(res, 1000));
+      await animationPromise;
       setLastRoll(result);
+      setDiceRolling(false);
       const next = await CrapsApi.me();
       setSession(next);
     } catch (e) {
       setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+      setDiceRolling(false);
     } finally {
       setBusy(false);
     }
@@ -214,10 +213,22 @@ export default function Craps() {
         <div className="text-xs uppercase tracking-wide text-white/60">
           {phase === "come_out" ? "Come-out" : `Point: ${point}`}
         </div>
-        {lastRoll && (
+        {(lastRoll || diceRolling) && (
+          <div className="my-2">
+            <Dice
+              d1={diceRolling ? 1 : (lastRoll?.roll.d1 ?? 1)}
+              d2={diceRolling ? 1 : (lastRoll?.roll.d2 ?? 1)}
+              rolling={diceRolling}
+            />
+          </div>
+        )}
+        {lastRoll && !diceRolling && (
           <>
-            <div className="font-mono text-3xl mt-1">
+            <div className="font-mono text-lg mt-1">
               {lastRoll.roll.d1} + {lastRoll.roll.d2} = {lastRoll.roll.total}
+              {lastRoll.roll.hard && lastRoll.roll.d1 === lastRoll.roll.d2 && (
+                <span className="text-amber-300 text-xs ml-2">HARD</span>
+              )}
             </div>
             <div className="text-xs text-white/70 mt-1">
               {(lastRoll.participants ?? []).map((p: any, i: number) => (
@@ -251,67 +262,16 @@ export default function Craps() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        {SIMPLE_BETS.map((b) => (
-          <button
-            key={b.bet_type}
-            onClick={() => addBet(b.bet_type)}
-            className="rounded-xl bg-felt p-3 text-left"
-          >
-            <div className="text-sm">+ {b.label}</div>
-            <div className="text-[11px] text-white/50">{b.phaseHint}</div>
-          </button>
-        ))}
-      </div>
-
-      <div className="rounded-xl bg-felt p-3 space-y-2">
-        <div className="text-xs uppercase tracking-wide text-white/60">Place numbers</div>
-        <div className="grid grid-cols-6 gap-1">
-          {PLACE_NUMBERS.map((n) => (
-            <button
-              key={n}
-              onClick={() => addBet("place", n)}
-              className="min-h-touch rounded-lg border border-white/20 text-sm font-mono"
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-xl bg-felt p-3 space-y-2">
-        <div className="text-xs uppercase tracking-wide text-white/60">Hardways</div>
-        <div className="grid grid-cols-4 gap-1">
-          {HARD_NUMBERS.map((n) => (
-            <button
-              key={n}
-              onClick={() => addBet("hard", n)}
-              className="min-h-touch rounded-lg border border-white/20 text-sm font-mono"
-            >
-              Hard {n}
-            </button>
-          ))}
-        </div>
-      </div>
+      <CrapsTable
+        book={book}
+        onAddBet={(bet_type, selection) => addBet(bet_type, selection)}
+        onCancelBet={cancelBet}
+      />
 
       {book.length > 0 && (
-        <div className="rounded-xl bg-felt p-3 space-y-1">
-          <div className="text-xs uppercase tracking-wide text-white/60">
-            On the table · ${onTableTotal}
-          </div>
-          {book.map((b) => (
-            <div key={b.bet_id} className="flex items-center justify-between text-sm">
-              <span>
-                {b.bet_type.replace(/_/g, " ")}
-                {b.selection != null && ` ${b.selection}`}
-                {b.established_point != null && ` (point ${b.established_point})`}
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="font-mono">${b.stake}</span>
-                <button onClick={() => cancelBet(b.bet_id)} className="text-white/40 text-xs">✕</button>
-              </span>
-            </div>
-          ))}
+        <div className="text-[11px] text-white/55 text-center">
+          On the table: <span className="font-mono">${onTableTotal}</span>
+          {" · tap a zone to add another ${unitBet} chip · ✕ cancels the last bet on that zone"}
         </div>
       )}
 

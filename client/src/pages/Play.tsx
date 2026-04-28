@@ -6,6 +6,7 @@ import { CoachPanel } from "../components/CoachPanel";
 import { Dealer } from "../components/Dealer";
 import { RoundSummary } from "../components/RoundSummary";
 import { SeatBlock, SeatPresenceDot } from "../components/Seat";
+import { TableSurface } from "../components/TableSurface";
 import { ApiError, Rounds, Seat, Sessions } from "../lib/api";
 import { useApp } from "../lib/store";
 import type { SessionView } from "../lib/types";
@@ -158,30 +159,31 @@ export default function Play() {
         </div>
       )}
 
-      {/* Dealer */}
-      {round ? (
-        <Dealer dealer={round.dealer} hideHole={hideHole} />
-      ) : (
-        <div className="rounded-xl bg-felt-dark/60 p-3 ring-1 ring-white/10 text-white/40 text-sm text-center">
-          Place a bet to deal.
-        </div>
-      )}
+      {/* Felt table: dealer at top, seats below. */}
+      <TableSurface>
+        {round ? (
+          <Dealer dealer={round.dealer} hideHole={hideHole} />
+        ) : (
+          <div className="rounded-xl bg-black/15 ring-1 ring-white/10 p-3 text-white/60 text-sm text-center">
+            Place a bet to deal.
+          </div>
+        )}
 
-      {/* Seats */}
-      {round && (
-        <div className="space-y-3">
-          {round.seats.map((s) => (
-            <SeatBlock
-              key={s.seat_num}
-              seat={s}
-              isActive={round.active_seat_num === s.seat_num}
-              activeHandIndex={round.active_hand_index}
-              kind={seatKindByNum[s.seat_num] ?? "ai"}
-              isYou={s.seat_num === callerSeat}
-            />
-          ))}
-        </div>
-      )}
+        {round && (
+          <div className="space-y-3 mt-3">
+            {round.seats.map((s) => (
+              <SeatBlock
+                key={s.seat_num}
+                seat={s}
+                isActive={round.active_seat_num === s.seat_num}
+                activeHandIndex={round.active_hand_index}
+                kind={seatKindByNum[s.seat_num] ?? "ai"}
+                isYou={s.seat_num === callerSeat}
+              />
+            ))}
+          </div>
+        )}
+      </TableSurface>
 
       {/* Pre-deal seat-occupancy summary (only when no round in flight) */}
       {!round && session.room_code && (

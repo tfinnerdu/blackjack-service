@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { CardFace } from "../components/Card";
+import { TableSurface } from "../components/TableSurface";
 import { ApiError } from "../lib/api";
 import { PersonalityAggregate, Poker, PokerSessionView, RoundView } from "../lib/poker";
 
@@ -149,30 +150,31 @@ export default function PokerTable() {
         </button>
       </div>
 
-      {/* AI seats around the table (top) */}
-      <div className="flex flex-wrap gap-2">
-        {round?.players.filter((p) => !p.is_human).map((p) => (
-          <SeatChip key={p.seat_num} player={p} dealerSeat={round?.dealer_seat ?? 0} />
-        ))}
-      </div>
-
-      {/* Community */}
-      <div className="rounded-xl bg-felt-dark/60 p-3 ring-1 ring-white/10">
-        <div className="text-xs uppercase tracking-wide text-white/60 mb-2 flex justify-between">
-          <span>Board</span>
-          <span>Pot ${round?.pot_total ?? 0}</span>
-        </div>
-        <div className="flex">
-          {round?.community.map((tok, i) => (
-            <div key={i} className="-ml-3 first:ml-0">
-              <CardFace card={tokenToCard(tok)} />
-            </div>
+      {/* Felt table: AI seats around the rim, community cards in the middle. */}
+      <TableSurface>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {round?.players.filter((p) => !p.is_human).map((p) => (
+            <SeatChip key={p.seat_num} player={p} dealerSeat={round?.dealer_seat ?? 0} />
           ))}
-          {(!round || round.community.length === 0) && (
-            <div className="text-xs text-white/40 italic">no community cards yet</div>
-          )}
         </div>
-      </div>
+
+        <div className="rounded-xl bg-black/20 p-3 ring-1 ring-white/10">
+          <div className="text-xs uppercase tracking-wide text-white/60 mb-2 flex justify-between">
+            <span>Board</span>
+            <span>Pot ${round?.pot_total ?? 0}</span>
+          </div>
+          <div className="flex">
+            {round?.community.map((tok, i) => (
+              <div key={i} className="-ml-3 first:ml-0">
+                <CardFace card={tokenToCard(tok)} />
+              </div>
+            ))}
+            {(!round || round.community.length === 0) && (
+              <div className="text-xs text-white/40 italic">no community cards yet</div>
+            )}
+          </div>
+        </div>
+      </TableSurface>
 
       {/* Human hole */}
       {round && human && (

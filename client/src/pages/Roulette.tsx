@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { RouletteWheel } from "../components/RouletteWheel";
 import {
   ApiError,
   CasinoParticipant,
@@ -40,6 +41,8 @@ export default function Roulette() {
   const [lastSpin, setLastSpin] = useState<{
     pocket: string; color: string; perParticipant: { label: string; profit: number }[];
   } | null>(null);
+  const [wheelSpinning, setWheelSpinning] = useState(false);
+  const [pendingPocket, setPendingPocket] = useState<string | null>(null);
   const [straightInput, setStraightInput] = useState("");
   const [joinCode, setJoinCode] = useState("");
 
@@ -136,6 +139,14 @@ export default function Roulette() {
     try {
       const result = await RouletteApi.spin();
       const spin = result.spin!;
+      // Kick the wheel animation off immediately with the target
+      // pocket; the result text + bankroll refresh wait until the
+      // animation has played out so the ball lands BEFORE the
+      // outcome lights up.
+      setPendingPocket(spin.pocket);
+      setWheelSpinning(true);
+      await new Promise((res) => window.setTimeout(res, 3500));
+      setWheelSpinning(false);
       setLastSpin({
         pocket: spin.pocket,
         color: spin.color,
@@ -148,6 +159,7 @@ export default function Roulette() {
       setSession(next);
     } catch (e) {
       setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+      setWheelSpinning(false);
     } finally {
       setBusy(false);
     }
@@ -242,27 +254,24 @@ export default function Roulette() {
         </div>
       )}
 
-      {lastSpin && (
-        <div
-          className="rounded-xl p-3 text-center"
-          style={{
-            background:
-              lastSpin.color === "red" ? "rgba(220, 38, 38, 0.25)"
-              : lastSpin.color === "black" ? "rgba(0, 0, 0, 0.45)"
-              : "rgba(16, 185, 129, 0.25)",
-          }}
-        >
-          <div className="text-xs text-white/70 uppercase tracking-wide">last spin</div>
-          <div className="text-4xl font-bold font-mono">{lastSpin.pocket}</div>
-          <div className="text-xs text-white/70 mt-1">
-            {lastSpin.perParticipant.map((p, i) => (
-              <span key={i} className="mx-1">
-                {p.label}: <span className={p.profit >= 0 ? "text-emerald-300" : "text-red-300"}>
-                  {p.profit >= 0 ? "+" : ""}${p.profit}
+      {(pendingPocket || lastSpin) && (
+        <div className="rounded-xl bg-felt p-3 pb-5">
+          <RouletteWheel
+            kind={(session.rules.wheel_kind as "american" | "european") ?? "american"}
+            pocket={pendingPocket}
+            spinning={wheelSpinning}
+          />
+          {lastSpin && !wheelSpinning && (
+            <div className="text-xs text-white/70 mt-3 text-center">
+              {lastSpin.perParticipant.map((p, i) => (
+                <span key={i} className="mx-1">
+                  {p.label}: <span className={p.profit >= 0 ? "text-emerald-300" : "text-red-300"}>
+                    {p.profit >= 0 ? "+" : ""}${p.profit}
+                  </span>
                 </span>
-              </span>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
