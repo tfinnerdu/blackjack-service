@@ -14,8 +14,8 @@ First-time setup
 Day-to-day local dev
 --------------------------------------------------------------------
   .\start-local.ps1
-  -> Flask on :5000  (API + serves built React after `npm run build`)
-  -> Vite  on :5173  (use this URL for live dev; proxies /api to Flask)
+  -> Flask on :5050  (API + serves built React after `npm run build`)
+  -> Vite  on :5174  (use this URL for live dev; proxies /api to Flask)
 
   Backend only:
   .\start-local.ps1 -BackendOnly
@@ -39,8 +39,8 @@ Frontend
 --------------------------------------------------------------------
 Health check
 --------------------------------------------------------------------
-  curl http://localhost:5000/health
-  curl http://localhost:5000/api/v1/version
+  curl http://localhost:5050/health
+  curl http://localhost:5050/api/v1/version
 
 --------------------------------------------------------------------
 Render deploy

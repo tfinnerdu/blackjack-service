@@ -1,7 +1,7 @@
 # Doane launcher standard. Zero-arg invocation starts the dev environment.
-# - Boots Flask on :5000 (api + serves built React)
-# - Boots Vite on :5173 (live frontend with /api proxy to Flask)
-# Open http://localhost:5173 for development.
+# - Boots Flask on :5050 (api + serves built React)
+# - Boots Vite on :5174 (live frontend with /api proxy to Flask)
+# Open http://localhost:5174 for development.
 
 param(
     [switch]$ForceDeps,
@@ -54,9 +54,9 @@ $LanIp = (Get-NetIPAddress -AddressFamily IPv4 |
 if ($env:FLASK_DEBUG) { } else { $env:FLASK_DEBUG = "1" }
 
 Write-Host "---"
-Write-Host "Flask:  http://localhost:5000"
-if (-not $BackendOnly) { Write-Host "Vite:   http://localhost:5173 (use this for dev)" }
-if ($LanIp) { Write-Host "LAN:    http://${LanIp}:5173" }
+Write-Host "Flask:  http://localhost:5050"
+if (-not $BackendOnly) { Write-Host "Vite:   http://localhost:5174 (use this for dev)" }
+if ($LanIp) { Write-Host "LAN:    http://${LanIp}:5174" }
 Write-Host "Logs:   $Log"
 Write-Host "---"
 

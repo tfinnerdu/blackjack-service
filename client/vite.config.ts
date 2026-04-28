@@ -11,10 +11,10 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
+    port: 5174,
     proxy: {
-      "/api": "http://127.0.0.1:5000",
-      "/health": "http://127.0.0.1:5000",
+      "/api": "http://127.0.0.1:5050",
+      "/health": "http://127.0.0.1:5050",
     },
   },
 });
