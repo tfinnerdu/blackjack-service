@@ -156,6 +156,8 @@ export default function Stats() {
           />
         )}
 
+        {session.room_code && <RoomCodeCard code={session.room_code} />}
+
         <div className="rounded-xl bg-felt p-3 text-xs space-y-1">
           <div className="flex justify-between">
             <span className="text-white/60">Template</span>
@@ -213,6 +215,53 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
       <div className="text-xs uppercase tracking-wide text-white/60">{label}</div>
       <div className="text-2xl font-mono">{value}</div>
       {sub && <div className="text-xs text-white/50">{sub}</div>}
+    </div>
+  );
+}
+
+function RoomCodeCard({ code }: { code: string }) {
+  const url = `${window.location.origin}/join/${code}`;
+  const [copied, setCopied] = useState<string | null>(null);
+
+  function copy(value: string, label: string) {
+    void navigator.clipboard?.writeText(value);
+    setCopied(label);
+    window.setTimeout(() => setCopied(null), 1500);
+  }
+
+  return (
+    <div className="rounded-xl bg-felt p-3 space-y-2">
+      <div className="text-xs uppercase tracking-wide text-white/60">
+        Invite a friend
+      </div>
+      <div className="flex items-center gap-3">
+        <div className="font-mono text-2xl tracking-widest flex-1 text-center bg-felt-dark rounded-lg py-2">
+          {code}
+        </div>
+        <button
+          onClick={() => copy(code, "code")}
+          className="min-h-touch px-3 rounded-lg border border-white/20 text-xs"
+        >
+          {copied === "code" ? "Copied!" : "Copy code"}
+        </button>
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          readOnly
+          value={url}
+          className="flex-1 rounded-lg bg-felt-dark text-white/80 text-xs px-2 py-2 font-mono"
+        />
+        <button
+          onClick={() => copy(url, "link")}
+          className="min-h-touch px-3 rounded-lg border border-white/20 text-xs"
+        >
+          {copied === "link" ? "Copied!" : "Copy link"}
+        </button>
+      </div>
+      <p className="text-[11px] text-white/50">
+        Share the link or have someone open <span className="font-mono">/join</span> and enter the code.
+        They can take over any of the bot seats.
+      </p>
     </div>
   );
 }

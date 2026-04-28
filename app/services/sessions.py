@@ -3,11 +3,17 @@ and the snapshot/restore helpers the round API will use in phase 6.
 
 Auth is anonymous and cookie-based. The token also works as a URL query
 param so a session is shareable / installable as a PWA without a login flow.
+
+Each session also gets a short `room_code` that lets a guest claim an AI
+seat at the table. Guests have their own anonymous tokens stored in
+`seat_tokens_json`; `resolve_seat_for_token` returns (session, seat_num)
+so the round API can authorize per-seat actions for either host or guest.
 """
 from __future__ import annotations
 
 import json
 import random
+import secrets
 from dataclasses import asdict, fields, is_dataclass
 from typing import Any, Optional
 
@@ -27,6 +33,25 @@ from ..models import GameSession, SettingsTemplate
 
 COOKIE_NAME = Config.SESSION_COOKIE_NAME
 TOKEN_QUERY_PARAM = "session"
+# Crockford-style alphabet: no 0/O/1/I/L. Six chars = ~30 bits of
+# entropy, plenty for casual collision avoidance.
+_ROOM_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+
+
+def _new_room_code() -> str:
+    return "".join(secrets.choice(_ROOM_CODE_ALPHABET) for _ in range(6))
+
+
+def generate_unique_room_code(max_attempts: int = 8) -> str:
+    """Pick a code that no live session is currently using. We allow a
+    few retries because the alphabet is large enough that real
+    collisions are vanishingly rare."""
+    for _ in range(max_attempts):
+        code = _new_room_code()
+        if not GameSession.query.filter_by(room_code=code).first():
+            return code
+    # Astronomically unlikely; fall through with whatever we generated.
+    return _new_room_code()
 
 
 # ---- token plumbing ----------------------------------------------------
@@ -160,10 +185,75 @@ def create_from_template(
         counter_cards_seen=0,
         player_seat=seat,
         ai_seats_json=json.dumps(ai_seats or _default_ai_seats(rules, seat)),
+        room_code=generate_unique_room_code(),
+        seat_tokens_json="{}",
     )
     db.session.add(sess)
     db.session.commit()
     return sess
+
+
+# ---- multi-seat token resolution -------------------------------------
+
+def get_session_by_room_code(code: str) -> Optional[GameSession]:
+    if not code:
+        return None
+    return GameSession.query.filter_by(room_code=code.upper()).first()
+
+
+def resolve_seat_for_token(token: str) -> tuple[Optional[GameSession], Optional[int]]:
+    """Map a token to its (session, seat_num).
+
+    Two paths:
+      1. Token == sess.token → host's seat (sess.player_seat).
+      2. Token appears in some session's seat_tokens_json → that guest seat.
+
+    Returns (None, None) if the token isn't bound to any session.
+    """
+    if not token:
+        return None, None
+    sess = GameSession.query.filter_by(token=token).first()
+    if sess is not None:
+        return sess, sess.player_seat
+    candidates = GameSession.query.filter(
+        GameSession.seat_tokens_json.like(f"%{token}%")
+    ).all()
+    for cand in candidates:
+        seats = json.loads(cand.seat_tokens_json or "{}")
+        for seat_num_str, t in seats.items():
+            if t == token:
+                return cand, int(seat_num_str)
+    return None, None
+
+
+def claim_seat(sess: GameSession, seat_num: int) -> str:
+    """Attach a fresh guest token to `seat_num`, replacing any previous
+    claim. The seat must exist as an AI seat in the session config and
+    must not be the host's seat. Returns the new guest token."""
+    if seat_num == sess.player_seat:
+        raise ValueError("the host's seat is not claimable")
+    rules = rules_from_dict(json.loads(sess.rules_json))
+    if not 1 <= seat_num <= rules.seats:
+        raise ValueError(f"seat_num {seat_num} not in 1..{rules.seats}")
+    ai_rows = json.loads(sess.ai_seats_json)
+    if not any(int(r.get("seat_num", -1)) == seat_num for r in ai_rows):
+        raise ValueError(f"seat {seat_num} is not configured as a bot seat")
+
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    new_token = secrets.token_urlsafe(32)
+    seats[str(seat_num)] = new_token
+    sess.seat_tokens_json = json.dumps(seats)
+    db.session.commit()
+    return new_token
+
+
+def release_seat(sess: GameSession, seat_num: int) -> None:
+    """Drop a guest claim — the seat goes back to the AI playstyle."""
+    seats = json.loads(sess.seat_tokens_json or "{}")
+    if str(seat_num) in seats:
+        del seats[str(seat_num)]
+        sess.seat_tokens_json = json.dumps(seats)
+        db.session.commit()
 
 
 def _default_ai_seats(rules: Rules, player_seat: int) -> list[dict]:

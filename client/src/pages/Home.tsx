@@ -96,6 +96,13 @@ export default function Home() {
           />
         </div>
 
+        <Link
+          to="/join"
+          className="block text-xs text-white/60 underline"
+        >
+          Join a friend's room with a code →
+        </Link>
+
         {loading && <div className="text-white/40 text-xs">checking session…</div>}
 
         {!install.installed && (install.available || install.isIOS) && (

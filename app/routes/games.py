@@ -5,6 +5,11 @@
   GET  /api/v1/sessions/me/rounds/active            current round view
   POST /api/v1/sessions/me/rounds/active/insurance  insurance decision
   POST /api/v1/sessions/me/rounds/active/action     hit / stand / double / split / surrender
+
+Multi-seat note: guests with claimed seats use the same endpoints; the
+caller's token is mapped to (session, seat_num) via `resolve_seat_for_token`
+and the engine refuses actions for any seat other than the one currently
+acting under the caller's token.
 """
 from __future__ import annotations
 
@@ -18,7 +23,11 @@ from ..services.games import (
     take_action,
     take_insurance,
 )
-from ..services.sessions import get_current_session
+from ..services.sessions import (
+    get_current_session,
+    get_session_token,
+    resolve_seat_for_token,
+)
 
 bp = Blueprint("games", __name__, url_prefix="/api/v1/sessions/me/rounds")
 
@@ -34,8 +43,20 @@ def _require_session():
     return sess, None
 
 
+def _resolve_seat():
+    """Return (session, seat_num, err). The token can be the host's or
+    a claimed-seat guest's. Either yields a (session, seat_num) pair."""
+    sess, seat_num = resolve_seat_for_token(get_session_token() or "")
+    if sess is None or seat_num is None:
+        return None, None, _err("no active session", "NO_SESSION", 404)
+    return sess, seat_num, None
+
+
 @bp.post("")
 def start():
+    # Only the host can start a round. Guest claims watch + act on their
+    # own seat once dealing happens; bet sizing for guest seats uses the
+    # bot's base_bet by default.
     sess, err = _require_session()
     if err:
         return err
@@ -55,7 +76,8 @@ def start():
 
 @bp.get("/active")
 def active():
-    sess, err = _require_session()
+    # Either the host or a guest can view the live round.
+    sess, _, err = _resolve_seat()
     if err:
         return err
     view = get_active_round_view(sess)
@@ -66,7 +88,7 @@ def active():
 
 @bp.post("/active/insurance")
 def insurance():
-    sess, err = _require_session()
+    sess, seat_num, err = _resolve_seat()
     if err:
         return err
     body = request.get_json() or {}
@@ -75,7 +97,7 @@ def insurance():
     if amount is not None and not isinstance(amount, int):
         return _err("amount must be int or null", "BAD_REQUEST")
     try:
-        view = take_insurance(sess, accept=accept, amount=amount)
+        view = take_insurance(sess, accept=accept, amount=amount, seat_num=seat_num)
     except GameError as e:
         return _err(str(e), "GAME_ERROR", 409)
     return jsonify(view.to_dict())
@@ -83,7 +105,7 @@ def insurance():
 
 @bp.post("/active/action")
 def action():
-    sess, err = _require_session()
+    sess, seat_num, err = _resolve_seat()
     if err:
         return err
     body = request.get_json() or {}
@@ -91,7 +113,7 @@ def action():
     if act not in ("hit", "stand", "double", "split", "surrender"):
         return _err("action must be one of hit|stand|double|split|surrender", "BAD_REQUEST")
     try:
-        view = take_action(sess, act)
+        view = take_action(sess, act, seat_num=seat_num)
     except GameError as e:
         return _err(str(e), "GAME_ERROR", 409)
     return jsonify(view.to_dict())

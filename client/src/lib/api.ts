@@ -3,6 +3,8 @@
 
 import type {
   ActionVerb,
+  ClaimSeatResponse,
+  RoomLobbyView,
   RoundView,
   SessionView,
   TemplateView,
@@ -122,6 +124,21 @@ export const Sessions = {
   reset: (seed?: number) =>
     http<SessionView>("POST", "/api/v1/sessions/me/reset", { seed }),
   destroy: () => http<{ deleted: boolean }>("DELETE", "/api/v1/sessions/me"),
+};
+
+export const Rooms = {
+  lobby: (code: string) =>
+    http<RoomLobbyView>("GET", `/api/v1/sessions/by-code/${encodeURIComponent(code)}`),
+  claim: (code: string, seatNum: number) =>
+    http<ClaimSeatResponse>(
+      "POST",
+      `/api/v1/sessions/by-code/${encodeURIComponent(code)}/seats/${seatNum}/claim`,
+    ),
+  release: (code: string, seatNum: number) =>
+    http<RoomLobbyView>(
+      "POST",
+      `/api/v1/sessions/by-code/${encodeURIComponent(code)}/seats/${seatNum}/release`,
+    ),
 };
 
 // ---- rounds -----------------------------------------------------------

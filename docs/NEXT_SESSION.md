@@ -7,7 +7,7 @@ session that landed the punch-list. Read this first, then `git log
 ## Current state
 
 - **Branch:** `main` is the only working branch. Pushes redeploy Render.
-- **Tests:** 418 backend pytest, frontend typecheck + build clean.
+- **Tests:** 428 backend pytest, frontend typecheck + build clean.
 - **Render:** live at the user's blackjack-service URL. gthread workers,
   Postgres free tier. Health = `/health`.
 - **Local dev ports:** Flask `5050`, Vite `5174` (project-specific
@@ -93,7 +93,55 @@ MIGRATING=1 FLASK_APP=wsgi.py flask db stamp head
 Then uncomment the `flask db upgrade` line in `render.yaml`'s
 buildCommand and push. Future schema changes flow through alembic.
 
-### 5. ✅ Lower-priority parking lot — three of four landed
+### 5. ✅ Form-based blackjack template builder — landed
+
+`client/src/components/BlackjackTemplateBuilder.tsx` mirrors the poker
+side's `VariantBuilder`: structured controls for shoe, dealer rules,
+payouts, double / split / surrender, money limits, and side-bet
+toggles. JSON view stays available via the header toggle. Setup.tsx
+passes a draft object to the new editor; the legacy JSON-only sheet is
+gone.
+
+### 6. ✅ Room codes + multi-seat — landed (MVP)
+
+Each new session gets a 6-character `room_code` (Crockford-ish
+alphabet, no 0/O/1/I/L). The host can share the code or a
+`/join/:code` link; visitors see a lobby of bot seats and can claim
+any one. Claiming returns a guest token (cookie-set) and converts
+that AI seat to a human-controlled seat for the round.
+
+Backend pieces:
+- `room_code` + `seat_tokens_json` columns on game_session
+- `resolve_seat_for_token` maps any token (host or guest) to (session,
+  seat_num). Round-API endpoints route through this so each token can
+  only act on its own seat (`take_action` raises if the active seat
+  doesn't match).
+- `GET /api/v1/sessions/by-code/:code` lobby view
+- `POST /api/v1/sessions/by-code/:code/seats/:n/claim` issues a guest
+  token + sets the cookie
+- `POST /api/v1/sessions/by-code/:code/seats/:n/release` drops a claim
+- `/sessions/me` resolves guest tokens too and returns
+  `caller_seat` + `caller_is_host` so the UI knows which seat is yours
+
+Frontend pieces:
+- `Stats` page shows the room code with copy-code / copy-link buttons
+- New `/join` and `/join/:code` routes (the bare `/join` accepts manual
+  code entry)
+- `Play` page polls `/sessions/me` every 4s and surfaces a toast on
+  any seat-token diff (join / leave)
+- `Seat` component shows a colored presence dot + Host / Player / Bot
+  label per seat; the polling refresh keeps the on-table indicators
+  live for everyone at the table.
+
+Open knobs the user might want next:
+- Per-guest bet sizing (right now claimed seats use the bot's
+  `base_bet`). Add a "your bet" widget to the guest's pre-deal view.
+- Last-seen heartbeat per guest so a closed-tab guest's seat shows
+  "idle" and the host can kick them.
+- WebSockets / SSE for sub-second multi-player updates instead of the
+  4-second poll.
+
+### 7. Lower-priority parking lot — three of four landed earlier
 
 - **✅ Stud bring-in mechanics**: 3rd-street lowest up-card brings in
   (highest in Razz), suit tie-break C < D < H < S. 4th-street onward

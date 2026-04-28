@@ -5,7 +5,7 @@ import { ActionBar } from "../components/ActionBar";
 import { CoachPanel } from "../components/CoachPanel";
 import { Dealer } from "../components/Dealer";
 import { RoundSummary } from "../components/RoundSummary";
-import { SeatBlock } from "../components/Seat";
+import { SeatBlock, SeatPresenceDot } from "../components/Seat";
 import { ApiError, Rounds, Sessions } from "../lib/api";
 import { useApp } from "../lib/store";
 
@@ -15,6 +15,7 @@ export default function Play() {
   const [error, setError] = useState<string | null>(null);
   const [bet, setBet] = useState(10);
   const [busy, setBusy] = useState(false);
+  const [joinLeaveToast, setJoinLeaveToast] = useState<string | null>(null);
 
   // Bootstrap: load the session + any active round if we landed here cold.
   useEffect(() => {
@@ -50,6 +51,40 @@ export default function Play() {
     }
   }, [round?.state, setSession]);
 
+  // Live presence: poll the session every 4s so the seat-occupancy view
+  // stays fresh, and surface a toast when a guest joins or leaves.
+  // We also refresh the round view so guests see the host's deal/actions.
+  useEffect(() => {
+    if (!session?.room_code) return;
+    const interval = window.setInterval(async () => {
+      try {
+        const next = await Sessions.me();
+        const before = Object.keys(session.seat_tokens ?? {});
+        const after = Object.keys(next.seat_tokens ?? {});
+        const joined = after.filter((s) => !before.includes(s));
+        const left = before.filter((s) => !after.includes(s));
+        if (joined.length > 0) {
+          setJoinLeaveToast(`Player joined seat ${joined.join(", ")}`);
+          window.setTimeout(() => setJoinLeaveToast(null), 4000);
+        } else if (left.length > 0) {
+          setJoinLeaveToast(`Seat ${left.join(", ")} opened up`);
+          window.setTimeout(() => setJoinLeaveToast(null), 4000);
+        }
+        setSession(next);
+      } catch {
+        // Network blip — keep going.
+      }
+      // Refresh round if one's in flight (multi-player live updates).
+      try {
+        const r = await Rounds.active();
+        setRound(r);
+      } catch {
+        // 404 = no round in flight; ignore.
+      }
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [session?.room_code, session?.seat_tokens, setSession, setRound]);
+
   async function startRound() {
     if (!session) return;
     setError(null);
@@ -72,11 +107,27 @@ export default function Play() {
     );
   }
 
+  const callerSeat = session.caller_seat ?? session.player_seat;
+  const isHost = session.caller_is_host !== false; // default to host on legacy
+  const guestAi = isHost
+    ? null
+    : session.ai_seats.find((a) => a.seat_num === callerSeat) ?? null;
+  const headerBankroll = isHost ? session.bankroll : (guestAi?.bankroll ?? 0);
+
   const minBet = session.rules.min_bet;
-  const maxBet = Math.min(session.rules.max_bet, session.bankroll);
+  const maxBet = Math.min(session.rules.max_bet, headerBankroll);
   const inc = session.rules.bet_increment;
   const hideHole =
     !!round && (round.state === "playing" || round.state === "insurance" || round.state === "betting");
+
+  // Seat occupancy lookup — used by SeatBlock to show host/guest/bot icons.
+  const seatKindByNum: Record<number, "host" | "guest" | "ai"> = {};
+  for (let n = 1; n <= session.rules.seats; n++) {
+    if (n === session.player_seat) seatKindByNum[n] = "host";
+    else if (session.seat_tokens && String(n) in session.seat_tokens)
+      seatKindByNum[n] = "guest";
+    else seatKindByNum[n] = "ai";
+  }
 
   return (
     <div
@@ -92,13 +143,21 @@ export default function Play() {
           ←
         </Link>
         <div className="text-center">
-          <div className="text-xs text-white/50">Bankroll</div>
-          <div className="font-mono text-xl">${session.bankroll}</div>
+          <div className="text-xs text-white/50">
+            {isHost ? "Bankroll" : `You are seat ${callerSeat ?? "?"}`}
+          </div>
+          <div className="font-mono text-xl">${headerBankroll}</div>
         </div>
         <Link to="/stats" className="text-right text-xs text-white/60 underline">
           Stats
         </Link>
       </div>
+
+      {joinLeaveToast && (
+        <div className="rounded-xl bg-emerald-500/20 ring-1 ring-emerald-300/40 px-3 py-2 text-sm text-emerald-100">
+          {joinLeaveToast}
+        </div>
+      )}
 
       {/* Dealer */}
       {round ? (
@@ -118,7 +177,34 @@ export default function Play() {
               seat={s}
               isActive={round.active_seat_num === s.seat_num}
               activeHandIndex={round.active_hand_index}
+              kind={seatKindByNum[s.seat_num] ?? "ai"}
+              isYou={s.seat_num === callerSeat}
             />
+          ))}
+        </div>
+      )}
+
+      {/* Pre-deal seat-occupancy summary (only when no round in flight) */}
+      {!round && session.room_code && (
+        <div className="rounded-xl bg-felt p-3 space-y-1">
+          <div className="text-xs uppercase tracking-wide text-white/60">
+            Table
+          </div>
+          {Object.entries(seatKindByNum).map(([n, kind]) => (
+            <div key={n} className="flex items-center gap-2 text-sm">
+              <SeatPresenceDot kind={kind as "host" | "guest" | "ai"} />
+              <span className="font-mono w-6">{n}</span>
+              <span className="flex-1">
+                {kind === "host"
+                  ? "Host"
+                  : kind === "guest"
+                    ? "Player"
+                    : "Bot"}
+                {Number(n) === callerSeat && (
+                  <span className="text-emerald-300 ml-1">(you)</span>
+                )}
+              </span>
+            </div>
           ))}
         </div>
       )}
@@ -153,8 +239,15 @@ export default function Play() {
         </div>
       ) : null}
 
-      {/* Pre-deal bet panel — only when no round AND bankroll is healthy */}
-      {!round && session.bankroll >= session.rules.min_bet ? (
+      {/* Guests don't control deals in MVP — host runs the table. */}
+      {!round && !isHost && (
+        <div className="mt-auto rounded-xl bg-felt p-3 text-center text-sm text-white/70">
+          Waiting for the host to deal the next round…
+        </div>
+      )}
+
+      {/* Pre-deal bet panel — host only, when no round AND bankroll is healthy */}
+      {!round && isHost && session.bankroll >= session.rules.min_bet ? (
         <div className="mt-auto rounded-xl bg-felt p-3 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs uppercase tracking-wide text-white/60">Your bet</span>

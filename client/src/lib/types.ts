@@ -131,6 +131,8 @@ export interface AISeatView {
 export interface SessionView {
   id: number;
   token: string;
+  room_code: string | null;
+  seat_tokens: Record<string, string>;
   template_id: number | null;
   template_name: string | null;
   rules: RulesView;
@@ -156,6 +158,33 @@ export interface SessionView {
   active_round: unknown | null;
   created_at: string;
   updated_at: string;
+  caller_seat?: number | null;
+  caller_is_host?: boolean;
+}
+
+export interface RoomSeatView {
+  seat_num: number;
+  kind: "host" | "guest" | "ai";
+  claimable: boolean;
+  playstyle?: string | null;
+  bet_pattern?: string | null;
+  base_bet?: number | null;
+  bankroll?: number | null;
+}
+
+export interface RoomLobbyView {
+  room_code: string;
+  template_name: string | null;
+  rules: RulesView;
+  seats: RoomSeatView[];
+  player_seat: number;
+  hands_played: number;
+}
+
+export interface ClaimSeatResponse {
+  token: string;
+  seat_num: number;
+  room: RoomLobbyView;
 }
 
 export interface TemplateView {

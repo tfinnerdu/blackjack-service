@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import {
+  BlackjackTemplateBuilder,
+  BlackjackTemplateDraft,
+  buildBlankBlackjackDraft,
+} from "../components/BlackjackTemplateBuilder";
 import { ApiError, Sessions, Templates } from "../lib/api";
 import { useApp } from "../lib/store";
 import type { TemplateView } from "../lib/types";
@@ -27,7 +32,7 @@ export default function Setup() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editorJson, setEditorJson] = useState("");
+  const [editorDraft, setEditorDraft] = useState<BlackjackTemplateDraft | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -105,79 +110,40 @@ export default function Setup() {
   }
 
   function openEditorBlank() {
-    setEditorJson(
-      JSON.stringify(
-        {
-          name: "My Custom Blackjack Rules",
-          description: "",
-          rules: {
-            decks: 6,
-            shuffle_mode: "casino",
-            penetration: 0.75,
-            seats: 5,
-            player_seat: 3,
-            dealer_hits_soft_17: true,
-            dealer_peeks: true,
-            blackjack_payout: [3, 2],
-            insurance_payout: [2, 1],
-            double_rule: "any2",
-            double_after_split: true,
-            max_splits: 3,
-            resplit_aces: false,
-            hit_split_aces: false,
-            surrender: "late",
-            insurance_offered: true,
-            starting_bankroll: 500,
-            min_bet: 5,
-            max_bet: 500,
-            bet_increment: 5,
-          },
-          side_bets: {},
-        },
-        null,
-        2,
-      ),
-    );
+    setEditorDraft(buildBlankBlackjackDraft());
     setEditorError(null);
     setEditorOpen(true);
   }
 
   function openEditorClone() {
     if (!selectedTemplate) return;
-    const clone = {
+    setEditorDraft({
       name: `${selectedTemplate.name} (copy)`,
       description: selectedTemplate.description,
-      rules: selectedTemplate.rules,
-      side_bets: selectedTemplate.side_bets,
-    };
-    setEditorJson(JSON.stringify(clone, null, 2));
+      rules: { ...selectedTemplate.rules },
+      side_bets: { ...selectedTemplate.side_bets },
+    });
     setEditorError(null);
     setEditorOpen(true);
   }
 
-  async function saveTemplate() {
-    let parsed: any;
-    try {
-      parsed = JSON.parse(editorJson);
-    } catch {
-      setEditorError("invalid JSON");
-      return;
-    }
-    if (!parsed.name) {
+  async function saveTemplate(draft: BlackjackTemplateDraft) {
+    if (!draft.name?.trim()) {
       setEditorError("name required");
       return;
     }
     try {
       const saved = await Templates.create({
         game_type: "blackjack",
-        name: parsed.name,
-        description: parsed.description ?? "",
-        rules: parsed.rules ?? {},
-        side_bets: parsed.side_bets ?? {},
+        name: draft.name,
+        description: draft.description ?? "",
+        rules: draft.rules ?? {},
+        side_bets: draft.side_bets ?? {},
       });
       await refreshTemplates();
       setTemplateId(saved.id);
       setEditorOpen(false);
+      setEditorDraft(null);
     } catch (e) {
       setEditorError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
     }
@@ -336,71 +302,17 @@ export default function Setup() {
         </button>
       </div>
 
-      {editorOpen && (
-        <TemplateEditorSheet
-          json={editorJson}
-          onJsonChange={setEditorJson}
+      {editorOpen && editorDraft && (
+        <BlackjackTemplateBuilder
+          initial={editorDraft}
           onSave={saveTemplate}
-          onClose={() => setEditorOpen(false)}
+          onCancel={() => {
+            setEditorOpen(false);
+            setEditorDraft(null);
+          }}
           error={editorError}
         />
       )}
-    </div>
-  );
-}
-
-function TemplateEditorSheet({
-  json,
-  onJsonChange,
-  onSave,
-  onClose,
-  error,
-}: {
-  json: string;
-  onJsonChange: (s: string) => void;
-  onSave: () => void;
-  onClose: () => void;
-  error: string | null;
-}) {
-  return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col"
-      style={{
-        paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-      }}
-    >
-      <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
-        <div className="flex items-center justify-between">
-          <div className="text-lg font-semibold">Edit blackjack rules</div>
-          <button onClick={onClose} className="text-white/60 text-lg">✕</button>
-        </div>
-        <p className="text-xs text-white/60">
-          Edit name + rules JSON. Required: name, rules. side_bets is optional
-          (toggle individual side bet rules inside its dict).
-        </p>
-        <textarea
-          value={json}
-          onChange={(e) => onJsonChange(e.target.value)}
-          spellCheck={false}
-          className="flex-1 rounded-lg bg-felt-dark text-white p-2 font-mono text-xs"
-        />
-        {error && <div className="text-red-300 text-sm">{error}</div>}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={onClose}
-            className="min-h-touch rounded-xl border border-white/20"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onSave}
-            className="min-h-touch rounded-xl bg-white text-felt-dark font-semibold"
-          >
-            Save
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

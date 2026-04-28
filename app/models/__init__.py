@@ -100,6 +100,14 @@ class GameSession(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     token = db.Column(db.String(64), nullable=False, unique=True, default=_new_token)
+    # Short shareable code for invite-by-link / verbal-share. Six chars from
+    # an unambiguous alphabet (no 0/O/1/I). Multiple guests can use it to
+    # claim a bot seat at the table.
+    room_code = db.Column(db.String(8), nullable=True, unique=True, index=True)
+    # JSON map {seat_num: token} of seats that have been claimed by a
+    # guest. The original `token` column above continues to authorize
+    # the host's seat (player_seat). NULL/empty means no guests yet.
+    seat_tokens_json = db.Column(db.Text, nullable=True, default="{}")
 
     # Rule snapshot at session start. The template can be edited later but
     # mid-session rules don't change.
@@ -178,6 +186,8 @@ class GameSession(db.Model):
         return {
             "id": self.id,
             "token": self.token,
+            "room_code": self.room_code,
+            "seat_tokens": json.loads(self.seat_tokens_json or "{}"),
             "template_id": self.template_id,
             "template_name": self.template.name if self.template else None,
             "rules": json.loads(self.rules_json),
@@ -313,6 +323,8 @@ def _ensure_columns() -> None:
     _add("game_session", "book_bankroll", "INTEGER NOT NULL DEFAULT 0")
     _add("game_session", "counter_bankroll", "INTEGER NOT NULL DEFAULT 0")
     _add("game_session", "bankroll_history_json", "TEXT NOT NULL DEFAULT '[]'")
+    _add("game_session", "room_code", "VARCHAR(8)")
+    _add("game_session", "seat_tokens_json", "TEXT")
     # One-time backfill: legacy rows came in at the column default of 0,
     # but a pre-existing session's book / counter bankroll should start
     # from the original buy-in. Idempotent — only flips rows that are
