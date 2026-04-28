@@ -13,6 +13,7 @@ from ..poker.ai import all_personalities
 from ..poker.cards import poker_card_from_token, poker_card_to_token
 from ..poker.companion import analyze
 from ..poker.deck import DeckSpec, PokerShoe
+from ..poker.equity import EquityError, monte_carlo_equity
 from ..poker.pot import BetAction
 from ..poker.variants import VariantSpec, all_variants
 from ..services.poker_games import (
@@ -243,6 +244,43 @@ def hand_action_endpoint():
 
 
 # ---- companion (existing) --------------------------------------------
+
+@bp.post("/equity")
+def equity_endpoint():
+    """Monte Carlo equity estimate. Body:
+      { "variant": "Texas Hold'em" | {variant dict},
+        "hole": ["AS", "KS"],
+        "board": ["TS", "9D", "2C"],
+        "opponents": 2,
+        "iterations": 2000,
+        "seed": 42 (optional) }
+
+    Community-card variants only; no wilds in v1.
+    """
+    body = request.get_json() or {}
+    variant_input = body.get("variant")
+    try:
+        if isinstance(variant_input, str):
+            variant = next((v for v in all_variants() if v.name == variant_input), None)
+            if variant is None:
+                return _err(f"unknown variant: {variant_input}", "BAD_REQUEST", 404)
+        elif isinstance(variant_input, dict):
+            variant = VariantSpec.from_dict(variant_input)
+        else:
+            return _err("variant required (name or dict)", "BAD_REQUEST")
+
+        hole = [poker_card_from_token(t) for t in body.get("hole", [])]
+        board = [poker_card_from_token(t) for t in body.get("board", [])]
+        result = monte_carlo_equity(
+            variant, hole, board,
+            opponents=int(body.get("opponents", 1)),
+            iterations=int(body.get("iterations", 2000)),
+            seed=body.get("seed"),
+        )
+    except (EquityError, KeyError, ValueError) as e:
+        return _err(str(e), "BAD_REQUEST")
+    return jsonify(result)
+
 
 @bp.post("/analyze")
 def analyze_endpoint():

@@ -3,7 +3,12 @@ import { Link } from "react-router-dom";
 
 import { CardChips, CardPicker } from "../components/poker/CardPicker";
 import { ApiError } from "../lib/api";
-import { CompanionAnalysisView, Poker, VariantSpec } from "../lib/poker";
+import {
+  CompanionAnalysisView,
+  EquityResult,
+  Poker,
+  VariantSpec,
+} from "../lib/poker";
 
 type Slot = "cards" | "hole" | "board";
 
@@ -24,6 +29,10 @@ export default function PokerPage() {
   const [editorError, setEditorError] = useState<string | null>(null);
   const [wildMode, setWildMode] = useState(false);
   const [wildIndices, setWildIndices] = useState<number[]>([]);
+  const [opponents, setOpponents] = useState(1);
+  const [equity, setEquity] = useState<EquityResult | null>(null);
+  const [equityBusy, setEquityBusy] = useState(false);
+  const [equityError, setEquityError] = useState<string | null>(null);
 
   function toggleWildIdx(idx: number) {
     setWildIndices((ws) =>
@@ -145,6 +154,34 @@ export default function PokerPage() {
     setWildMode(false);
     setAnalysis(null);
     setError(null);
+  }
+
+  async function runEquity() {
+    if (!variant) return;
+    setEquityBusy(true);
+    setEquityError(null);
+    setEquity(null);
+    try {
+      const result = await Poker.equity(
+        isOmaha
+          ? { variant: variant.name, hole, board, opponents, iterations: 2000 }
+          : {
+              variant: variant.name,
+              // Map flat 'cards' to hole + board: assume the FIRST n_hole are
+              // hero's hole and the rest are the visible board. Hold'em uses
+              // 2; other community variants set their own hole_cards count.
+              hole: cards.slice(0, variant.deal.hole_cards),
+              board: cards.slice(variant.deal.hole_cards),
+              opponents,
+              iterations: 2000,
+            },
+      );
+      setEquity(result);
+    } catch (e) {
+      setEquityError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+    } finally {
+      setEquityBusy(false);
+    }
   }
 
   async function analyze() {
@@ -334,6 +371,16 @@ export default function PokerPage() {
         </div>
 
         {analysis && <AnalysisView a={analysis} />}
+
+        <EquityPanel
+          opponents={opponents}
+          setOpponents={setOpponents}
+          equity={equity}
+          busy={equityBusy}
+          error={equityError}
+          onRun={runEquity}
+          variant={variant}
+        />
       </div>
 
       {editorOpen && (
@@ -496,6 +543,102 @@ function AnalysisView({ a }: { a: CompanionAnalysisView }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function EquityPanel({
+  opponents,
+  setOpponents,
+  equity,
+  busy,
+  error,
+  onRun,
+  variant,
+}: {
+  opponents: number;
+  setOpponents: (n: number) => void;
+  equity: EquityResult | null;
+  busy: boolean;
+  error: string | null;
+  onRun: () => void;
+  variant: VariantWithMeta | null;
+}) {
+  const supported =
+    !!variant
+    && variant.deal.up_cards === 0
+    && variant.deal.stud_streets.length === 0
+    && variant.deal.draws.length === 0
+    && variant.wilds.length === 0;
+  return (
+    <div className="rounded-xl bg-felt-dark/60 p-3 ring-1 ring-white/10 space-y-2">
+      <div className="text-xs uppercase tracking-wide text-white/60">Equity (sim)</div>
+      {!supported ? (
+        <div className="text-xs text-white/50">
+          Equity sim supports community-card variants without wilds. Use the
+          companion above for variants with wild rules.
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-white/60">vs</span>
+            <button
+              onClick={() => setOpponents(Math.max(1, opponents - 1))}
+              className="min-w-touch min-h-touch rounded-lg border border-white/20"
+            >
+              −
+            </button>
+            <div className="flex-1 text-center font-mono">{opponents} opp</div>
+            <button
+              onClick={() => setOpponents(Math.min(8, opponents + 1))}
+              className="min-w-touch min-h-touch rounded-lg border border-white/20"
+            >
+              +
+            </button>
+            <button
+              onClick={onRun}
+              disabled={busy}
+              className="min-h-touch px-4 rounded-xl bg-white text-felt-dark font-semibold disabled:opacity-40"
+            >
+              {busy ? "…" : "Run"}
+            </button>
+          </div>
+          {error && <div className="text-red-300 text-sm">{error}</div>}
+          {equity && (
+            <div className="grid grid-cols-3 gap-2 text-center text-sm">
+              <Tile label="Win" value={`${equity.win_pct}%`} accent="emerald" />
+              <Tile label="Tie" value={`${equity.tie_pct}%`} />
+              <Tile label="Loss" value={`${equity.loss_pct}%`} accent="red" />
+            </div>
+          )}
+          {equity && (
+            <div className="text-xs text-white/50 text-center">
+              {equity.iterations} sims · equity {equity.equity_pct}%
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Tile({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: "emerald" | "red";
+}) {
+  const color =
+    accent === "emerald" ? "text-emerald-300"
+    : accent === "red" ? "text-red-300"
+    : "text-white";
+  return (
+    <div className="rounded-lg bg-white/5 p-2">
+      <div className="text-[10px] uppercase tracking-wide text-white/50">{label}</div>
+      <div className={`font-mono text-lg ${color}`}>{value}</div>
     </div>
   );
 }

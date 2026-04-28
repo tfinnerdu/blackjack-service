@@ -54,6 +54,19 @@ export interface LowAnalysisView {
   explanation: string;
 }
 
+export interface EquityResult {
+  variant: string;
+  opponents: number;
+  iterations: number;
+  wins: number;
+  ties: number;
+  losses: number;
+  win_pct: number;
+  tie_pct: number;
+  loss_pct: number;
+  equity_pct: number;
+}
+
 export interface CompanionAnalysisView {
   variant_name: string;
   user_cards: string[];
@@ -159,6 +172,14 @@ export const Poker = {
     ),
   deleteVariant: (templateId: number) =>
     http<void>("DELETE", `/api/v1/poker/variants/${templateId}`),
+  equity: (body: {
+    variant: string | VariantSpec;
+    hole: string[];
+    board?: string[];
+    opponents?: number;
+    iterations?: number;
+    seed?: number;
+  }) => http<EquityResult>("POST", "/api/v1/poker/equity", body),
   personalities: () => http<{ personalities: string[] }>("GET", "/api/v1/poker/personalities"),
   analyze: (body: {
     variant: string | VariantSpec;
