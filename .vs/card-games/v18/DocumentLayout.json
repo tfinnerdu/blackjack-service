@@ -1,0 +1,438 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\doane\\Personal\\card-games\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug-3.1.8.dist-info\\METADATA||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\werkzeug-3.1.8.dist-info\\METADATA||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug\\testapp.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\werkzeug\\testapp.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug\\serving.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\werkzeug\\serving.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\client.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\socketio\\client.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\async_client.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\socketio\\async_client.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\asgi.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\socketio\\asgi.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\gunicorn\\app\\pasterapp.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\gunicorn\\app\\pasterapp.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask_socketio\\__init__.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\flask_socketio\\__init__.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask-3.1.3.dist-info\\METADATA||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\flask-3.1.3.dist-info\\METADATA||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask\\cli.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\flask\\cli.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask\\app.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\flask\\app.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\eventlet\\websocket.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\eventlet\\websocket.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\client.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\engineio\\client.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\async_drivers\\asgi.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\engineio\\async_drivers\\asgi.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\async_client.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:venv\\Lib\\site-packages\\engineio\\async_client.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\start-local.ps1||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:start-local.ps1||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\docs\\bashCommands.txt||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:docs\\bashCommands.txt||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\client\\vite.config.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:client\\vite.config.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\client\\node_modules\\vite\\dist\\node\\constants.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:client\\node_modules\\vite\\dist\\node\\constants.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\Procfile||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:Procfile||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\.env.example||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:.env.example||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|C:\\doane\\Personal\\card-games\\app.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{826CFE90-C5DC-4BC5-97B3-64F16AFF6E2F}|card-games.pyproj|solutionrelative:app.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "METADATA",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug-3.1.8.dist-info\\METADATA",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\werkzeug-3.1.8.dist-info\\METADATA",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug-3.1.8.dist-info\\METADATA",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\werkzeug-3.1.8.dist-info\\METADATA",
+              "ViewState": "AgIAAE8AAAAAAAAAAAAawFgAAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-04-28T05:30:48.783Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "testapp.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug\\testapp.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\werkzeug\\testapp.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug\\testapp.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\werkzeug\\testapp.py",
+              "ViewState": "AgIAALkAAAAAAAAAAAD4v8EAAAAfAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:30:44.003Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "serving.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug\\serving.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\werkzeug\\serving.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\werkzeug\\serving.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\werkzeug\\serving.py",
+              "ViewState": "AgIAAP8CAAAAAAAAAAD4vwcDAAA/AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:30:37.788Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "client.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\client.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\socketio\\client.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\client.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\socketio\\client.py",
+              "ViewState": "AgIAAG0AAAAAAAAAAAD4v3UAAAAtAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:30:27.847Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "async_client.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\async_client.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\socketio\\async_client.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\async_client.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\socketio\\async_client.py",
+              "ViewState": "AgIAAHAAAAAAAAAAAAD4v3gAAAAzAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:30:22.061Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "asgi.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\asgi.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\socketio\\asgi.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\socketio\\asgi.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\socketio\\asgi.py",
+              "ViewState": "AgIAAB4AAAAAAAAAAAD4vyYAAAAzAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:30:17.67Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "pasterapp.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\gunicorn\\app\\pasterapp.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\gunicorn\\app\\pasterapp.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\gunicorn\\app\\pasterapp.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\gunicorn\\app\\pasterapp.py",
+              "ViewState": "AgIAACAAAAAAAAAAAAD4vygAAAASAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:30:04.477Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "__init__.py (flask_socketio)",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask_socketio\\__init__.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\flask_socketio\\__init__.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask_socketio\\__init__.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\flask_socketio\\__init__.py",
+              "ViewState": "AgIAAGECAAAAAAAAAAD4v2kCAAAaAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:29:52.871Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "METADATA",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask-3.1.3.dist-info\\METADATA",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\flask-3.1.3.dist-info\\METADATA",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask-3.1.3.dist-info\\METADATA",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\flask-3.1.3.dist-info\\METADATA",
+              "ViewState": "AgIAAD4AAAAAAAAAAAAawEcAAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-04-28T05:29:47.378Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "cli.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask\\cli.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\flask\\cli.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask\\cli.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\flask\\cli.py",
+              "ViewState": "AgIAAHMDAAAAAAAAAAD4v3sDAAApAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:29:41.43Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "app.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask\\app.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\flask\\app.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\flask\\app.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\flask\\app.py",
+              "ViewState": "AgIAAIICAAAAAAAAAAD4v4oCAAAWAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:29:30.452Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "websocket.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\eventlet\\websocket.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\eventlet\\websocket.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\eventlet\\websocket.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\eventlet\\websocket.py",
+              "ViewState": "AgIAACsAAAAAAAAAAAD4vzMAAAAYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:29:14.156Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "client.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\client.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\engineio\\client.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\client.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\engineio\\client.py",
+              "ViewState": "AgIAAEoAAAAAAAAAAAD4v1IAAAAtAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:29:08.46Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "asgi.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\async_drivers\\asgi.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\engineio\\async_drivers\\asgi.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\async_drivers\\asgi.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\engineio\\async_drivers\\asgi.py",
+              "ViewState": "AgIAACMAAAAAAAAAAAD4vysAAAApAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:29:03.599Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "async_client.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\async_client.py",
+              "RelativeDocumentMoniker": "venv\\Lib\\site-packages\\engineio\\async_client.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\venv\\Lib\\site-packages\\engineio\\async_client.py",
+              "RelativeToolTip": "venv\\Lib\\site-packages\\engineio\\async_client.py",
+              "ViewState": "AgIAAGQAAAAAAAAAAAD4v2wAAAAzAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:28:57.568Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 17,
+              "Title": "vite.config.ts",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\client\\vite.config.ts",
+              "RelativeDocumentMoniker": "client\\vite.config.ts",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\client\\vite.config.ts",
+              "RelativeToolTip": "client\\vite.config.ts",
+              "ViewState": "AgIAAA0AAAAAAAAAAAAEwBQAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-04-28T05:27:50.206Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 18,
+              "Title": "constants.js",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\client\\node_modules\\vite\\dist\\node\\constants.js",
+              "RelativeDocumentMoniker": "client\\node_modules\\vite\\dist\\node\\constants.js",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\client\\node_modules\\vite\\dist\\node\\constants.js",
+              "RelativeToolTip": "client\\node_modules\\vite\\dist\\node\\constants.js",
+              "ViewState": "AgIAAGEAAAAAAAAAAAAEwGoAAAAdAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2026-04-28T05:27:41.411Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{131369f2-062d-44a2-8671-91ff31efb4f4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{75188d03-9892-4ae2-abf1-207126247ce5}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:132:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:131:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:135:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:136:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:137:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 19,
+              "Title": "Procfile",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\Procfile",
+              "RelativeDocumentMoniker": "Procfile",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\Procfile",
+              "RelativeToolTip": "Procfile",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-04-28T05:24:11.975Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 20,
+              "Title": ".env.example",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\.env.example",
+              "RelativeDocumentMoniker": ".env.example",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\.env.example",
+              "RelativeToolTip": ".env.example",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-04-28T05:24:03.682Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "start-local.ps1",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\start-local.ps1",
+              "RelativeDocumentMoniker": "start-local.ps1",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\start-local.ps1",
+              "RelativeToolTip": "start-local.ps1",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-04-28T05:22:47.49Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "bashCommands.txt",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\docs\\bashCommands.txt",
+              "RelativeDocumentMoniker": "docs\\bashCommands.txt",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\docs\\bashCommands.txt",
+              "RelativeToolTip": "docs\\bashCommands.txt",
+              "ViewState": "AgIAACEAAAAAAAAAAAAawCoAAAAbAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003109|",
+              "WhenOpened": "2026-04-28T05:18:51.24Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 21,
+              "Title": "app.py",
+              "DocumentMoniker": "C:\\doane\\Personal\\card-games\\app.py",
+              "RelativeDocumentMoniker": "app.py",
+              "ToolTip": "C:\\doane\\Personal\\card-games\\app.py",
+              "RelativeToolTip": "app.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2026-04-28T05:16:15.004Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
