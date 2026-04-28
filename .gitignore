@@ -31,4 +31,4 @@ app/static/
 .DS_Store
 /.vs
 .vs/
-/app/ai/__pycache__/bet_patterns.cpython-311.pyc
+*__pycache__/
