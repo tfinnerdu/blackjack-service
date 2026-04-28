@@ -25,7 +25,7 @@ Manual venv work
 --------------------------------------------------------------------
   .\.venv\Scripts\Activate.ps1
   pip install -r requirements.txt
-  python app.py
+  python wsgi.py
 
 --------------------------------------------------------------------
 Frontend
@@ -48,7 +48,7 @@ Render deploy
   Push to the main branch. render.yaml drives the build:
     pip install -r requirements.txt
     cd client && npm ci && npm run build
-    gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT app:app
+    gunicorn -k eventlet -w 1 -b 0.0.0.0:$PORT wsgi:app
 
   Health check path: /health
 
