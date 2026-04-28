@@ -1,4 +1,4 @@
-"""Gunicorn / dev entry point. `gunicorn -k eventlet -w 1 wsgi:app`.
+"""Gunicorn / dev entry point. `gunicorn -k gthread --threads 4 -w 1 wsgi:app`.
 
 Named wsgi.py rather than app.py to avoid colliding with the `app/`
 package — Python prefers packages over modules with the same name, so
