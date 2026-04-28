@@ -1,11 +1,13 @@
 {
-  "name": "Blackjack Trainer",
-  "short_name": "BJ Trainer",
-  "description": "Customizable blackjack practice with book-vs-played stats.",
+  "name": "Card Trainer",
+  "short_name": "CardTrainer",
+  "description": "Blackjack trainer + poker companion / simulator. Real bankrolls, real sessions, no bonus chips.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#073a23",
   "theme_color": "#073a23",
+  "categories": ["games", "education"],
   "icons": []
 }

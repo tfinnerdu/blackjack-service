@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError, Sessions } from "../lib/api";
+import { useInstallPrompt } from "../lib/install";
 import { useApp } from "../lib/store";
 
 export default function Home() {
@@ -9,6 +10,8 @@ export default function Home() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [hasSession, setHasSession] = useState(false);
+  const install = useInstallPrompt();
+  const [iosHintShown, setIosHintShown] = useState(false);
 
   useEffect(() => {
     Sessions.me()
@@ -94,6 +97,34 @@ export default function Home() {
         </div>
 
         {loading && <div className="text-white/40 text-xs">checking session…</div>}
+
+        {!install.installed && (install.available || install.isIOS) && (
+          <div className="text-center">
+            {install.available && (
+              <button
+                onClick={() => install.trigger()}
+                className="text-xs text-white/60 underline"
+              >
+                Install to home screen
+              </button>
+            )}
+            {install.isIOS && !install.available && !iosHintShown && (
+              <button
+                onClick={() => setIosHintShown(true)}
+                className="text-xs text-white/60 underline"
+              >
+                Install on iPhone?
+              </button>
+            )}
+            {iosHintShown && (
+              <div className="text-xs text-white/50 mt-1 max-w-[18rem] mx-auto">
+                Tap Share <span aria-hidden>⤴</span> in Safari, then
+                <em> Add to Home Screen</em>. Launches full-screen with no
+                browser chrome.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
