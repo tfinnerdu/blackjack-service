@@ -132,6 +132,9 @@ export interface PlayerView {
   hands_played: number;
   hands_won: number;
   profit_total: number;
+  // Stud-only: per-seat visible cards. For opponents, face-down slots
+  // arrive as null; for the human, all slots are filled tokens.
+  cards?: (string | null)[];
 }
 
 export interface PersonalityAggregate {
@@ -173,9 +176,12 @@ export interface HandResultView {
 }
 
 export interface RoundView {
+  family?: "holdem" | "draw" | "stud";
   state:
     | "dealing" | "pre_flop" | "flop" | "turn" | "river"
-    | "showdown" | "complete";
+    | "showdown" | "complete"
+    // Draw + stud add their own state values:
+    | "betting" | "drawing" | "dealing_street";
   community: string[];
   human_hole: string[];
   pot_total: number;
@@ -187,6 +193,15 @@ export interface RoundView {
   result: HandResultView | null;
   dealer_seat: number;
   personality_stats: PersonalityAggregate[];
+  // Draw-only metadata (present when family === "draw"):
+  draw?: {
+    betting_round_index: number;
+    draw_round_index: number;
+    discard_pending: boolean;
+    max_discard: number;
+  };
+  // Stud-only metadata (present when family === "stud"):
+  stud?: { street_index: number };
 }
 
 export const Poker = {
@@ -234,6 +249,12 @@ export const Poker = {
       "POST",
       "/api/v1/poker/sessions/me/hands/active/action",
       { action, amount },
+    ),
+  discard: (indices: number[]) =>
+    http<RoundView>(
+      "POST",
+      "/api/v1/poker/sessions/me/hands/active/discard",
+      { indices },
     ),
   sessionStats: () => http<PokerSessionStats>("GET", "/api/v1/poker/sessions/me/stats"),
 };

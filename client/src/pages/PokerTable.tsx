@@ -12,6 +12,7 @@ export default function PokerTable() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [raiseAmount, setRaiseAmount] = useState<number | null>(null);
+  const [discardSelected, setDiscardSelected] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     Poker.getSession()
@@ -69,6 +70,30 @@ export default function PokerTable() {
     }
   }
 
+  async function confirmDiscard() {
+    setBusy(true);
+    setError(null);
+    try {
+      const indices = Array.from(discardSelected).sort((a, b) => a - b);
+      const r = await Poker.discard(indices);
+      setRound(r);
+      setDiscardSelected(new Set());
+    } catch (e) {
+      setError(e instanceof ApiError ? `${e.code}: ${e.message}` : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleDiscardIdx(i: number, max: number) {
+    setDiscardSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(i)) next.delete(i);
+      else if (next.size < max) next.add(i);
+      return next;
+    });
+  }
+
   async function endSession() {
     if (!confirm("End this poker session? Stacks will be lost.")) return;
     await Poker.endSession();
@@ -85,12 +110,21 @@ export default function PokerTable() {
 
   const human = round?.players.find((p) => p.is_human);
   const showStartCTA = !round || round.state === "complete";
-  const isHumanTurn = !!(
+  const BETTING_STATES = new Set([
+    "betting",     // draw + stud + (poker holdem after our refactor)
+    "pre_flop", "flop", "turn", "river",  // legacy holdem state names
+  ]);
+  const isBettingTurn = !!(
     round
+    && BETTING_STATES.has(round.state)
     && round.active_seat !== null
     && human
     && round.active_seat === human.seat_num
-    && round.state !== "complete"
+  );
+  const isDiscardTurn = !!(
+    round
+    && round.family === "draw"
+    && round.draw?.discard_pending
   );
 
   return (
@@ -148,12 +182,34 @@ export default function PokerTable() {
             {human.committed_this_round > 0 && <span>bet ${human.committed_this_round}</span>}
           </div>
           <div className="flex">
-            {round.human_hole.map((tok, i) => (
-              <div key={i} className="-ml-3 first:ml-0">
-                <CardFace card={tokenToCard(tok)} />
-              </div>
-            ))}
+            {round.human_hole.map((tok, i) => {
+              const isMarkedDiscard = isDiscardTurn && discardSelected.has(i);
+              return (
+                <div
+                  key={i}
+                  className={`-ml-3 first:ml-0 transition-transform ${
+                    isMarkedDiscard ? "translate-y-2 opacity-60" : ""
+                  }`}
+                  onClick={() => {
+                    if (isDiscardTurn && round.draw) {
+                      toggleDiscardIdx(i, round.draw.max_discard);
+                    }
+                  }}
+                  style={{ cursor: isDiscardTurn ? "pointer" : "default" }}
+                >
+                  <CardFace card={tokenToCard(tok)} />
+                </div>
+              );
+            })}
           </div>
+          {isDiscardTurn && round?.draw && (
+            <div className="text-xs text-amber-200/80 mt-2">
+              Tap to mark up to {round.draw.max_discard} card
+              {round.draw.max_discard === 1 ? "" : "s"} for discard
+              ({discardSelected.size} selected). Confirm with the
+              button below.
+            </div>
+          )}
         </div>
       )}
 
@@ -169,8 +225,8 @@ export default function PokerTable() {
         <PersonalityScoreboard stats={round.personality_stats} />
       )}
 
-      {/* Action bar (human's turn) */}
-      {round && isHumanTurn && (
+      {/* Action bar (human's betting turn) */}
+      {round && isBettingTurn && (
         <ActionBar
           round={round}
           humanStack={human?.stack ?? 0}
@@ -179,6 +235,28 @@ export default function PokerTable() {
           onAct={act}
           busy={busy}
         />
+      )}
+
+      {/* Discard confirm (draw poker, drawing phase) */}
+      {round && isDiscardTurn && (
+        <div
+          className="fixed inset-x-0 bottom-0 px-3 pt-3 bg-felt-dark/95 backdrop-blur ring-1 ring-white/10"
+          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}
+        >
+          <div className="max-w-md mx-auto">
+            <button
+              onClick={confirmDiscard}
+              disabled={busy}
+              className="w-full min-h-touch rounded-xl bg-white text-felt-dark font-semibold disabled:opacity-50"
+            >
+              {busy
+                ? "…"
+                : discardSelected.size === 0
+                ? "Stand pat"
+                : `Discard ${discardSelected.size}`}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Start CTA */}
@@ -228,8 +306,31 @@ function SeatChip({
       </div>
       {tag && <div className="opacity-60 italic">{tag}</div>}
       <div className="text-[10px] opacity-50">{player.personality?.replace(/_/g, " ")}</div>
+      {/* Stud-only: render each visible card slot. null = face-down. */}
+      {player.cards && player.cards.length > 0 && (
+        <div className="flex gap-0.5 mt-1">
+          {player.cards.map((tok, i) => (
+            <div
+              key={i}
+              className={`w-5 h-7 rounded-sm flex items-center justify-center text-[8px] font-mono
+                ${tok ? "bg-white text-black" : "bg-felt ring-1 ring-white/20 text-white/40"}`}
+            >
+              {tok ? formatStudToken(tok) : "??"}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+function formatStudToken(tok: string): string {
+  if (tok === "JK" || tok === "jk") return "JK";
+  const rank = tok[0] === "T" ? "10" : tok[0];
+  const suit = tok[1];
+  const glyph =
+    suit === "S" ? "♠" : suit === "H" ? "♥" : suit === "D" ? "♦" : "♣";
+  return `${rank}${glyph}`;
 }
 
 function ActionBar({
