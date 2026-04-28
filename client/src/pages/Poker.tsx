@@ -22,6 +22,14 @@ export default function PokerPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorJson, setEditorJson] = useState("");
   const [editorError, setEditorError] = useState<string | null>(null);
+  const [wildMode, setWildMode] = useState(false);
+  const [wildIndices, setWildIndices] = useState<number[]>([]);
+
+  function toggleWildIdx(idx: number) {
+    setWildIndices((ws) =>
+      ws.includes(idx) ? ws.filter((i) => i !== idx) : [...ws, idx],
+    );
+  }
 
   useEffect(() => {
     Poker.variants()
@@ -103,12 +111,14 @@ export default function PokerPage() {
   const isOmaha = variant?.hand === "omaha_2_hole_3_board";
   const jokersAllowed = (variant?.deck.jokers ?? 0) > 0;
 
-  // Switch active slot defaults when the variant changes.
+  // Switch active slot defaults when the variant changes; reset wilds.
   useEffect(() => {
     if (!variant) return;
     setActiveSlot(isOmaha ? "hole" : "cards");
     setAnalysis(null);
     setError(null);
+    setWildIndices([]);
+    setWildMode(false);
   }, [variant, isOmaha]);
 
   function add(token: string) {
@@ -131,6 +141,8 @@ export default function PokerPage() {
     setHole([]);
     setBoard([]);
     setCards([]);
+    setWildIndices([]);
+    setWildMode(false);
     setAnalysis(null);
     setError(null);
   }
@@ -142,8 +154,16 @@ export default function PokerPage() {
     try {
       const result = await Poker.analyze(
         isOmaha
-          ? { variant: variant.name, hole, board }
-          : { variant: variant.name, cards },
+          ? {
+              variant: variant.name,
+              hole, board,
+              wild_indices: wildIndices.length ? wildIndices : undefined,
+            }
+          : {
+              variant: variant.name,
+              cards,
+              wild_indices: wildIndices.length ? wildIndices : undefined,
+            },
       );
       setAnalysis(result);
     } catch (e) {
@@ -243,12 +263,20 @@ export default function PokerPage() {
               label="Hole (4)"
               cards={hole}
               onRemove={(i) => remove("hole", i)}
+              onToggleWild={(i) => toggleWildIdx(i)}
+              wildIndices={wildIndices.filter((wi) => wi < hole.length)}
+              wildMode={wildMode}
               isActive={activeSlot === "hole"}
             />
             <SlotBlock
               label="Board"
               cards={board}
               onRemove={(i) => remove("board", i)}
+              onToggleWild={(i) => toggleWildIdx(hole.length + i)}
+              wildIndices={wildIndices
+                .filter((wi) => wi >= hole.length)
+                .map((wi) => wi - hole.length)}
+              wildMode={wildMode}
               isActive={activeSlot === "board"}
             />
           </>
@@ -257,17 +285,35 @@ export default function PokerPage() {
             label="Your cards"
             cards={cards}
             onRemove={(i) => remove("cards", i)}
+            onToggleWild={(i) => toggleWildIdx(i)}
+            wildIndices={wildIndices}
+            wildMode={wildMode}
             isActive
           />
         )}
 
-        <div className="rounded-xl bg-felt p-3">
-          <CardPicker
-            onAdd={add}
-            onAddJoker={addJoker}
-            jokersAllowed={jokersAllowed}
-          />
-        </div>
+        <button
+          onClick={() => setWildMode((w) => !w)}
+          className={`w-full min-h-touch rounded-xl text-sm font-semibold ${
+            wildMode
+              ? "bg-amber-500/30 text-amber-100 ring-1 ring-amber-400"
+              : "border border-white/20 text-white/70"
+          }`}
+        >
+          {wildMode
+            ? `Wild marking on (${wildIndices.length}) — tap a chip to toggle`
+            : "Mark cards wild for this hand…"}
+        </button>
+
+        {!wildMode && (
+          <div className="rounded-xl bg-felt p-3">
+            <CardPicker
+              onAdd={add}
+              onAddJoker={addJoker}
+              jokersAllowed={jokersAllowed}
+            />
+          </div>
+        )}
 
         {error && <div className="text-red-300 text-sm">{error}</div>}
 
@@ -366,11 +412,17 @@ function SlotBlock({
   label,
   cards,
   onRemove,
+  onToggleWild,
+  wildIndices,
+  wildMode,
   isActive,
 }: {
   label: string;
   cards: string[];
   onRemove: (i: number) => void;
+  onToggleWild?: (i: number) => void;
+  wildIndices?: number[];
+  wildMode?: boolean;
   isActive: boolean;
 }) {
   return (
@@ -385,7 +437,9 @@ function SlotBlock({
       <CardChips
         cards={cards}
         onRemove={onRemove}
-        emptyLabel="tap a rank below to add a card"
+        onToggleWild={wildMode ? onToggleWild : undefined}
+        wildIndices={wildIndices}
+        emptyLabel={wildMode ? "tap an existing chip to mark wild" : "tap a rank below to add a card"}
       />
     </div>
   );

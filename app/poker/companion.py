@@ -107,28 +107,45 @@ def _lo_to_dict(l: Optional[LowAnalysis]) -> Optional[dict]:
 
 # ---- wild detection ----------------------------------------------------
 
-def _wild_indices(cards: list[PokerCard], rules: list[WildRule]) -> tuple[list[int], WildMode, str]:
-    """Return (indices, dominant_mode, explanation).
+def _wild_indices(
+    cards: list[PokerCard],
+    rules: list[WildRule],
+    extra_indices: Optional[list[int]] = None,
+) -> tuple[set[int], WildMode, str]:
+    """Return (set of object ids that are wild, dominant_mode, explanation).
 
     'Dominant mode' is the strictest active mode: SF_ONLY > BUG > FULLY_WILD.
     A hand with mixed rules is rare outside designer games — for v1 we
     apply the strictest mode hand-wide and explain it in the result.
+
+    `extra_indices` lets the caller mark specific positions in `cards` as
+    wild for this hand only (e.g. 'follow the queen' triggered on a
+    one-off basis). These cards default to FULLY_WILD.
     """
-    indices: list[int] = []
+    wild_ids: set[int] = set()
     explanations: list[str] = []
     modes: set[WildMode] = set()
 
     for i, c in enumerate(cards):
         for rule in rules:
             if _matches(c, rule):
-                indices.append(i)
+                wild_ids.add(id(c))
                 modes.add(rule.mode)
                 explanations.append(_describe_match(c, rule))
                 break
 
-    indices = sorted(set(indices))
-    if not indices:
-        return [], WildMode.FULLY_WILD, ""
+    if extra_indices:
+        for idx in extra_indices:
+            if 0 <= idx < len(cards):
+                c = cards[idx]
+                if id(c) not in wild_ids:
+                    explanations.append(f"{poker_card_to_token(c)} (marked wild)")
+                wild_ids.add(id(c))
+        if not modes:
+            modes.add(WildMode.FULLY_WILD)
+
+    if not wild_ids:
+        return set(), WildMode.FULLY_WILD, ""
 
     if WildMode.STRAIGHT_FLUSH_ONLY in modes:
         dominant = WildMode.STRAIGHT_FLUSH_ONLY
@@ -138,7 +155,7 @@ def _wild_indices(cards: list[PokerCard], rules: list[WildRule]) -> tuple[list[i
         dominant = WildMode.FULLY_WILD
 
     explanation = "; ".join(dict.fromkeys(explanations)) + " | " + _mode_blurb(dominant)
-    return indices, dominant, explanation
+    return wild_ids, dominant, explanation
 
 
 def _matches(card: PokerCard, rule: WildRule) -> bool:
@@ -192,26 +209,31 @@ def _resolve_high(
     *,
     hole: Optional[list[PokerCard]] = None,
     board: Optional[list[PokerCard]] = None,
+    extra_wild_indices: Optional[list[int]] = None,
 ) -> HighAnalysis:
-    """Build the best high hand under the variant's hand-requirement rule."""
-    wild_idx, mode, wild_expl = _wild_indices(cards, variant.wilds)
+    """Build the best high hand under the variant's hand-requirement rule.
+
+    `extra_wild_indices` are positions in `cards` (or hole+board concat for
+    Omaha) the caller has marked wild for this hand only.
+    """
+    wild_ids, mode, wild_expl = _wild_indices(cards, variant.wilds, extra_wild_indices)
 
     # No wilds -> straight evaluator path.
-    if not wild_idx:
+    if not wild_ids:
         if variant.hand == HandRequirement.OMAHA_2_HOLE_3_BOARD and hole and board:
             rank = best_high([], must_use=2, hole=hole, board=board)
         else:
             rank = best_high(cards)
         return _high_analysis_from_rank(rank, "")
 
-    # Wilds present. Iterate over every 5-card combo, evaluate each with
-    # wilds, pick the best.
-    return _resolve_high_with_wilds(cards, variant, mode, wild_expl, hole, board)
+    # Wilds present. Iterate every 5-card combo, evaluate with wilds.
+    return _resolve_high_with_wilds(cards, variant, wild_ids, mode, wild_expl, hole, board)
 
 
 def _resolve_high_with_wilds(
     cards: list[PokerCard],
     variant: VariantSpec,
+    wild_ids: set[int],
     mode: WildMode,
     wild_expl: str,
     hole: Optional[list[PokerCard]],
@@ -227,7 +249,7 @@ def _resolve_high_with_wilds(
 
     best: Optional[HandRank] = None
     for combo in candidates:
-        wild_in_combo = [i for i, x in enumerate(combo) if isinstance(x, Joker) or _is_marked_wild(x, variant.wilds)]
+        wild_in_combo = [i for i, x in enumerate(combo) if id(x) in wild_ids]
         if wild_in_combo:
             rank = evaluate_with_wilds(combo, wild_indices=wild_in_combo, mode=mode)
         else:
@@ -236,10 +258,6 @@ def _resolve_high_with_wilds(
             best = rank
     assert best is not None
     return _high_analysis_from_rank(best, wild_expl)
-
-
-def _is_marked_wild(card: Card, rules: list[WildRule]) -> bool:
-    return any(_matches(card, r) for r in rules)
 
 
 def _high_analysis_from_rank(rank: HandRank, wild_expl: str) -> HighAnalysis:
@@ -382,12 +400,17 @@ def analyze(
     *,
     hole: Optional[list[PokerCard]] = None,
     board: Optional[list[PokerCard]] = None,
+    extra_wild_indices: Optional[list[int]] = None,
 ) -> CompanionAnalysis:
     """Build a companion-mode analysis for the user's hand under `variant`.
 
     For Omaha-style 2+3 variants, pass `hole` and `board` separately. For
     every other variant, just pass `cards` (a flat list of everything the
     player can see).
+
+    `extra_wild_indices` are positions in the consolidated card list (cards
+    for non-Omaha; hole+board concat for Omaha) the caller has marked
+    wild on a one-off basis (e.g. 'follow-the-queen' triggered this hand).
     """
     if variant.hand == HandRequirement.OMAHA_2_HOLE_3_BOARD:
         if hole is None or board is None:
@@ -402,7 +425,10 @@ def analyze(
     wild_resolution: Optional[str] = None
 
     if variant.hi_lo != HiLoSplit.LO_ONLY:
-        hi_a = _resolve_high(all_cards, variant, hole=hole, board=board)
+        hi_a = _resolve_high(
+            all_cards, variant, hole=hole, board=board,
+            extra_wild_indices=extra_wild_indices,
+        )
         if hi_a.explanation and "wilds:" in hi_a.explanation:
             wild_resolution = hi_a.explanation.split("wilds:", 1)[1].strip()
 

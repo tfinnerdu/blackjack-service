@@ -274,8 +274,19 @@ def analyze_endpoint():
         cards = [poker_card_from_token(t) for t in body.get("cards", [])]
         hole = [poker_card_from_token(t) for t in body.get("hole", [])] if body.get("hole") else None
         board = [poker_card_from_token(t) for t in body.get("board", [])] if body.get("board") else None
+        # Per-hand wild marking: positions (in the consolidated cards list,
+        # or hole+board concatenated for Omaha) the user has tap-marked
+        # as wild for this hand only — covers 'follow the queen' triggers.
+        extra = body.get("wild_indices")
+        if extra is not None and not isinstance(extra, list):
+            return _err("wild_indices must be a list of ints", "BAD_REQUEST")
+        if extra is not None:
+            extra = [int(i) for i in extra]
 
-        result = analyze(variant, cards, hole=hole, board=board)
+        result = analyze(
+            variant, cards, hole=hole, board=board,
+            extra_wild_indices=extra,
+        )
     except (KeyError, ValueError) as e:
         return _err(str(e), "BAD_REQUEST")
 

@@ -81,15 +81,21 @@ export function CardPicker({
 export function CardChips({
   cards,
   onRemove,
+  onToggleWild,
+  wildIndices,
   emptyLabel,
 }: {
   cards: string[];
   onRemove: (index: number) => void;
+  onToggleWild?: (index: number) => void;
+  wildIndices?: number[];
   emptyLabel: string;
 }) {
   if (cards.length === 0) {
     return <div className="text-xs text-white/40 italic">{emptyLabel}</div>;
   }
+  const wildSet = new Set(wildIndices ?? []);
+  const wildMode = !!onToggleWild;
   return (
     <div className="flex flex-wrap gap-1.5">
       {cards.map((token, i) => {
@@ -97,15 +103,17 @@ export function CardChips({
         const suit = isJoker ? "" : token[1];
         const rank = isJoker ? "" : token[0] === "T" ? "10" : token[0];
         const red = suit === "H" || suit === "D";
+        const isWild = wildSet.has(i);
         return (
           <button
             key={i}
-            onClick={() => onRemove(i)}
+            onClick={() => (wildMode ? onToggleWild!(i) : onRemove(i))}
             className={`min-h-touch px-2 rounded-lg font-mono text-sm flex items-center gap-1
               ${isJoker
                 ? "bg-amber-500/30 text-amber-100"
-                : "bg-white"}`}
-            title="Tap to remove"
+                : "bg-white"}
+              ${isWild ? "ring-2 ring-amber-400" : ""}`}
+            title={wildMode ? "Tap to mark wild" : "Tap to remove"}
           >
             {isJoker ? (
               <span>{token}</span>
@@ -117,7 +125,8 @@ export function CardChips({
                 </span>
               </>
             )}
-            <span className="text-xs opacity-50">×</span>
+            {!wildMode && <span className="text-xs opacity-50">×</span>}
+            {isWild && <span className="text-xs text-amber-600">★</span>}
           </button>
         );
       })}

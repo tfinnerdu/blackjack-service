@@ -146,3 +146,35 @@ def test_hands_that_beat_a_pair_includes_two_pair_through_5oak():
     a = analyze(v, cards)
     assert "Two pair" in a.hands_that_beat_you
     assert "Straight flush" in a.hands_that_beat_you
+
+
+# ---- per-hand wild marking ('follow the queen') ----------------------
+
+def test_extra_wild_indices_promote_pair_to_quads():
+    """Hold'em with no wild rules in variant. User taps two cards as
+    wild on a one-off basis. Two aces + two 'wild' cards -> quad aces."""
+    v = _variant("Texas Hold'em")
+    cards = H("AS", "AH", "9C", "5D", "3H", "7S", "JC")
+    # Mark 9C and 5D wild (positions 2 and 3) — companion treats them as
+    # fully wild for this hand.
+    a = analyze(v, cards, extra_wild_indices=[2, 3])
+    assert a.hi.cls_name == "Four of a kind"
+
+
+def test_extra_wild_indices_appear_in_resolution_explanation():
+    v = _variant("Texas Hold'em")
+    cards = H("AS", "AH", "QC", "5D", "3H", "7S", "JC")
+    a = analyze(v, cards, extra_wild_indices=[2])
+    assert a.wild_resolution is not None
+    assert "marked wild" in a.wild_resolution
+
+
+def test_extra_wild_indices_compose_with_variant_wilds():
+    """Variant has joker SF-only wilds; user additionally taps one card
+    as wild. The dominant mode (SF-only) wins, but BOTH cards are wild."""
+    v = _variant("Hold'em (53-card, joker S/F only)")
+    # Player has joker + 4 hearts + tap-wilds the AS in the hole.
+    cards = H("JK", "KH", "5H", "9H", "QH", "AS", "2D")
+    a = analyze(v, cards, extra_wild_indices=[5])
+    # With joker + AS both wild and 4 hearts, SF-only mode finds a flush.
+    assert a.hi.cls_name in ("Flush", "Straight flush")

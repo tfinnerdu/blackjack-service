@@ -165,6 +165,7 @@ export const Poker = {
     cards?: string[];
     hole?: string[];
     board?: string[];
+    wild_indices?: number[];
   }) => http<CompanionAnalysisView>("POST", "/api/v1/poker/analyze", body),
 
   // ---- simulator -----------------------------------------------------
