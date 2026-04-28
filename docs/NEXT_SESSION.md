@@ -7,7 +7,7 @@ session that landed the punch-list. Read this first, then `git log
 ## Current state
 
 - **Branch:** `main` is the only working branch. Pushes redeploy Render.
-- **Tests:** 412 backend pytest, frontend typecheck + build clean.
+- **Tests:** 418 backend pytest, frontend typecheck + build clean.
 - **Render:** live at the user's blackjack-service URL. gthread workers,
   Postgres free tier. Health = `/health`.
 - **Local dev ports:** Flask `5050`, Vite `5174` (project-specific
@@ -93,16 +93,28 @@ MIGRATING=1 FLASK_APP=wsgi.py flask db stamp head
 Then uncomment the `flask db upgrade` line in `render.yaml`'s
 buildCommand and push. Future schema changes flow through alembic.
 
-### 5. Lower-priority parking lot
+### 5. ✅ Lower-priority parking lot — three of four landed
 
-- Stud bring-in mechanics (lowest up-card acts first on 3rd street;
-  highest hand thereafter). Current stud round uses simplified
-  first-active-seat ordering — playable but not tournament-correct.
-- Stud Hi/Lo split pot. Variant exists in the library but the round
-  picks one of HI_ONLY / LO_ONLY based on `variant.hi_lo`.
-- Form-based blackjack template builder (current is JSON only — the
-  poker side has the structured form via VariantBuilder).
-- Real PWA icon set. Manifest is in place, icons array empty.
+- **✅ Stud bring-in mechanics**: 3rd-street lowest up-card brings in
+  (highest in Razz), suit tie-break C < D < H < S. 4th-street onward
+  uses a `_showing_score` helper — pair count, top pair rank, sorted
+  ranks — to pick the strongest visible hand. Razz inverts the
+  comparison so the weakest visible hand acts first (a pair is a
+  liability in lowball). Tests in `tests/test_poker_stud_round.py`
+  cover lowest-card, suit tiebreak, Razz reversal, and the
+  4th-street pair-of-aces transfer of action.
+- **✅ Stud Hi/Lo split pot**: `_settle_split` halves each side pot
+  between the high winner(s) and the qualifying low winner(s); when
+  no low qualifies, high scoops. Odd-dollar remainder goes to high
+  per card-room convention.
+- **✅ Real PWA icon set**: SVG + 192/512/512-maskable/180/32 PNGs
+  generated from `client/scripts/build-icons.py`. Manifest references
+  all four sizes; index.html links favicon + apple-touch-icon. The
+  raster step uses Pillow (one-time helper, not a build dependency).
+- **Form-based blackjack template builder** (open): current template
+  editor is JSON-only. Poker has VariantBuilder with structured
+  controls; need a similar form for blackjack (rule toggles,
+  side-bet payouts, etc.). Largest remaining UI piece.
 
 ## Things that bit me this session worth remembering
 
