@@ -1,13 +1,15 @@
-# Poker Companion — What It Does Right Now
+# Poker — Companion + Simulator
 
-A web companion you use **at the table** during poker night. Pick the
-variant, tap your cards, and it tells you exactly where you stand:
-- your best **high** hand
-- your best **low** hand if the variant has one
-- whether your low **qualifies** (and why, in plain English)
-- how the **pot splits** (high-only / low-only / 8-or-better / etc.)
-- which cards in your hand are **wild** and how
-- which hand classes still **beat you**
+Two modes:
+
+- **Companion** — at the table, with real cards. Pick a variant, tap your
+  hand, see your best high + low + the hi/lo split rule + which hand
+  classes still beat you. Useful in your hand when the dealer says
+  "Anaconda Hi/Lo, low qualifies at 8" and you have to figure out what
+  qualifies.
+- **Simulator** — solo trainer. Sit down at a table with personality
+  bots, real chip stacks, real blinds, and play out hands of Hold'em
+  (or the home-game 53-card joker version) until you bust or quit.
 
 Built mobile-first so your phone fits between the chips and the cards.
 
@@ -73,9 +75,26 @@ straight, flush, or straight flush; if none exist, the joker goes dead
 your hand are wild and how they're being treated.
 
 For variants with rank-based wilds (Baseball, Ice Age, Follow the Queen),
-all marked cards are treated as fully wild. The wild rule builder for
-custom variants (triggered wilds, after-queen, declared-wild-on-the-fly)
-ships next phase.
+all marked cards are treated as fully wild.
+
+## Saving custom variants
+
+Your buddy's 100+ variant book has somewhere to live now:
+
+- Pick any built-in variant in the companion → **Clone** → tweak the
+  JSON to taste → **Save**. The new variant shows up in the picker
+  alongside the built-ins for the next hand.
+- **+ New** opens the editor with a blank-slate template you can paste
+  a variant into.
+- **Delete** removes a saved variant. Built-ins are read-only.
+
+The JSON shape mirrors `VariantSpec` exactly — deck composition, deal
+scheme (hole / community / stud / draws), wild rules, hand requirement,
+hi/lo split, low rule + qualifier. Anything the engine supports is
+expressible as JSON.
+
+A friendlier form-based wild rule builder is on the list (current editor
+is JSON-only, which works for a typed user but isn't tap-friendly).
 
 ---
 
