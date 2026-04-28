@@ -136,6 +136,18 @@ class GameSession(db.Model):
     book_profit = db.Column(db.Integer, nullable=False, default=0)
     actual_profit = db.Column(db.Integer, nullable=False, default=0)
     book_mistakes = db.Column(db.Integer, nullable=False, default=0)
+    # Parallel-replay bankrolls for "what-if" stats. Each round we replay
+    # the same shoe state with two virtual strategies and accumulate their
+    # profit deltas:
+    #   book_bankroll: human seat played to perfect basic-strategy book.
+    #   counter_bankroll: human seat played book + Hi-Lo indices and used
+    #     a count-spread bet pattern (so high counts get bigger bets).
+    # Initialized to starting_bankroll on session create; advances per round.
+    book_bankroll = db.Column(db.Integer, nullable=False, default=0)
+    counter_bankroll = db.Column(db.Integer, nullable=False, default=0)
+    # Time series of (hand, actual, book, counter) tuples for the chart.
+    # Capped to last 1000 hands to keep the row size reasonable.
+    bankroll_history_json = db.Column(db.Text, nullable=False, default="[]")
     # Heuristic EV-lost-to-mistakes (cents to avoid float). Each time the
     # human's action diverges from book, an action-specific fraction of
     # the bet is added here. Approximation, not a Monte Carlo EV — useful
@@ -194,6 +206,8 @@ class GameSession(db.Model):
                 "player_blackjacks": self.player_blackjacks,
                 "busts": self.busts,
                 "surrenders": self.surrenders,
+                "book_bankroll": self.book_bankroll,
+                "counter_bankroll": self.counter_bankroll,
             },
             "active_round": (
                 json.loads(self.active_round_json) if self.active_round_json else None
@@ -296,6 +310,22 @@ def _ensure_columns() -> None:
     _add("game_session", "player_blackjacks", "INTEGER NOT NULL DEFAULT 0")
     _add("game_session", "busts", "INTEGER NOT NULL DEFAULT 0")
     _add("game_session", "surrenders", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "book_bankroll", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "counter_bankroll", "INTEGER NOT NULL DEFAULT 0")
+    _add("game_session", "bankroll_history_json", "TEXT NOT NULL DEFAULT '[]'")
+    # One-time backfill: legacy rows came in at the column default of 0,
+    # but a pre-existing session's book / counter bankroll should start
+    # from the original buy-in. Idempotent — only flips rows that are
+    # still at the migration default.
+    if "game_session" in table_names:
+        cols = {c["name"] for c in insp.get_columns("game_session")}
+        if {"book_bankroll", "counter_bankroll", "starting_bankroll"} <= cols:
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    "UPDATE game_session SET book_bankroll = starting_bankroll, "
+                    "counter_bankroll = starting_bankroll "
+                    "WHERE book_bankroll = 0 AND counter_bankroll = 0"
+                ))
 
 
 def seed_builtin_presets() -> None:

@@ -112,6 +112,13 @@ def stats_me():
             "running_count": sess.running_count,
             "cards_seen": sess.counter_cards_seen,
         },
+        bankrolls={
+            "actual": sess.bankroll,
+            "book": sess.book_bankroll,
+            "counter": sess.counter_bankroll,
+            "starting": sess.starting_bankroll,
+        },
+        bankroll_history=json.loads(sess.bankroll_history_json or "[]"),
     )
 
 

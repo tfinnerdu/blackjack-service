@@ -7,7 +7,7 @@ session that landed the punch-list. Read this first, then `git log
 ## Current state
 
 - **Branch:** `main` is the only working branch. Pushes redeploy Render.
-- **Tests:** 401 backend pytest, frontend typecheck + build clean.
+- **Tests:** 412 backend pytest, frontend typecheck + build clean.
 - **Render:** live at the user's blackjack-service URL. gthread workers,
   Postgres free tier. Health = `/health`.
 - **Local dev ports:** Flask `5050`, Vite `5174` (project-specific
@@ -22,57 +22,69 @@ session that landed the punch-list. Read this first, then `git log
 
 ## Open items the user is aware of (in order)
 
-### 1. End-user feedback on stats — V2 features
+### 1. ✅ V2 stats features — landed this session
 
 Quote: "I think there's more stats that you could show for a session
 such as money made vs what if money playing strictly by the book vs
 AI's card counting money and betting."
 
-Three concrete tracks:
-- **What-if-book bankroll**: parallel running total of "what would
-  bankroll be if I'd played every hand exactly per the book?" Today
-  the engine tracks book-mistakes count + a heuristic EV-lost. The
-  ask is the exact replay value. Implementation: at hand settlement,
-  re-deal with the same shoe state, force every player action to the
-  book recommendation, settle, take the profit delta.
-- **AI counter's bankroll**: spawn a virtual seat that bets the count
-  + plays the book + uses Hi-Lo + Illustrious 18. Engine pieces all
-  exist (`app/strategy/book.py`, `app/counting/`, `app/ai/`). Surface
-  as a third bankroll line on the Stats page.
-- **Time-series chart**: divergence between your bankroll, book
-  bankroll, counter bankroll across the session. Frontend chart lib
-  TBD — recharts is the obvious pick.
+What shipped:
+- **What-if-book bankroll** (`book_bankroll`): every settled round
+  re-runs the same shoe state with the human seat playing perfect
+  basic strategy. Profit delta accumulates into `book_bankroll`.
+  Implementation: `_replay_human_profit` in `app/services/games.py`.
+- **AI counter bankroll** (`counter_bankroll`): same replay but with
+  Hi-Lo / Illustrious 18 deviations enabled and a count-spread bet
+  pattern sized off the human's actual base bet.
+- **Time-series chart**: lightweight inline SVG sparkline on the Stats
+  page (no new chart-lib dependency). Three lines: you / book /
+  counter, anchored by a dashed buy-in line.
+- **Persistence**: new `book_bankroll`, `counter_bankroll`,
+  `bankroll_history_json` columns on `game_session` with both a
+  Flask-Migrate-compatible model definition and a
+  `_ensure_columns` shim entry that backfills legacy rows from
+  `starting_bankroll`.
+- **API**: `/sessions/me/stats` returns `bankrolls.{actual,book,counter,starting}`
+  and `bankroll_history` (last 1000 hands).
 
-### 2. End-user "something seems off" — fairness audit
+Tests: `tests/test_bankroll_replay.py` covers initial state, one entry
+per hand, exact equality between actual and book when the player
+follows book, and that the endpoint surfaces both fields.
 
-The user's friend reported a 63% win rate over 129 hands with $554
-profit on a $200 buy-in, anecdotally never seeing dealer blackjacks
-across many ace-up situations. Statistically that win rate is ~4σ
-above expected; if real, the engine has a bias.
+Possible follow-ups if asked:
+- The replay always uses a 1× spread base equal to the human's bet for
+  that hand — if the human is varying their bet wildly, the counter
+  comparison is still bet-for-bet. A fairer comparison would use a
+  fixed unit. Easy knob.
+- AI seats in the replay still play their normal playstyle (random
+  RNG fresh per replay). Their actions diverge from the actual round
+  but only the human's profit is summed, so this is tolerated noise.
 
-Concrete next steps to investigate:
-- **Add a fairness audit test**: `tests/test_fairness_audit.py` that
-  spins up a 6-deck H17 session and runs 10,000 hands of "always
-  stand" against the engine. Asserts dealer-BJ rate ≈ 4.8%, player-BJ
-  rate ≈ 4.8%, dealer-bust rate ≈ 28%, player win-rate ≈ 43%. Within
-  reasonable tolerance.
-- **Add a debug shoe-trace logger**: env-var-gated; writes every
-  card dealt + the running count after each hand to a session debug
-  file. Lets the user generate a real-session trace + mail it in for
-  forensic review.
-- Hot suspects to eyeball:
-  - `Round.deal()` in `app/engine/round.py` — order is correct on
-    inspection, but verify with a rigged shoe + known cards.
-  - Dealer peek logic in `_after_insurance_decided` — both paths
-    (insurance-offered and not) flow through the same peek block,
-    confirmed locally.
-  - Hi-Lo counter — `Counter.see_many` on every visible card from the
-    round at settle time.
+### 2. ✅ Fairness audit — clean
 
-If the audit test stays green to within tolerance, the user's friend
-hit unusual variance. If not, we have a real engine bug.
+`tests/test_fairness_audit.py` spins up a 6-deck H17 shoe and runs
+10,000 always-stand rounds against the engine. Asserts:
+  - player BJ rate ≈ 4.75% ± 1%
+  - dealer BJ rate ≈ 4.75% ± 1%
+  - dealer bust rate ≈ 28.4% ± 2.5%
+  - dealer BJ rate when up-card is an Ace ≈ 30.8% ± 5%
 
-### 3. Migration switchover (when ready)
+Both tests pass — the engine is fair within tolerance. The friend's
+63% / 129-hand streak was variance, not bias. Re-run this test if a
+similar complaint comes in.
+
+### 3. ✅ Shoe-trace debug logger — landed
+
+`BLACKJACK_SHOE_TRACE=/path/to/trace.jsonl` enables a per-round JSON
+Lines append. Each line records the cards dealt to every seat and
+the dealer, the running count after the round, the session id, the
+shoe seed, and the player outcome. Off by default = zero overhead.
+Tests in `tests/test_shoe_trace.py` cover the gate, multi-round
+appending, and IO error suppression. To pull a trace from prod: set
+the env var on the Render service, ask the user to play, then
+download the file.
+
+### 4. Migration switchover (when ready)
 
 In Render's shell:
 ```
@@ -81,7 +93,7 @@ MIGRATING=1 FLASK_APP=wsgi.py flask db stamp head
 Then uncomment the `flask db upgrade` line in `render.yaml`'s
 buildCommand and push. Future schema changes flow through alembic.
 
-### 4. Lower-priority parking lot
+### 5. Lower-priority parking lot
 
 - Stud bring-in mechanics (lowest up-card acts first on 3rd street;
   highest hand thereafter). Current stud round uses simplified

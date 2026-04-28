@@ -72,6 +72,13 @@ export interface CreateSessionBody {
   seed?: number;
 }
 
+export interface BankrollHistoryEntry {
+  hand: number;
+  actual: number;
+  book: number;
+  counter: number;
+}
+
 export interface SessionStatsView {
   hands_played: number;
   starting_bankroll: number;
@@ -98,6 +105,13 @@ export interface SessionStatsView {
     running_count: number;
     cards_seen: number;
   };
+  bankrolls: {
+    actual: number;
+    book: number;
+    counter: number;
+    starting: number;
+  };
+  bankroll_history: BankrollHistoryEntry[];
 }
 
 export const Sessions = {

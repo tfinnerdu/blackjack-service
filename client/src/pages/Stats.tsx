@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { ApiError, SessionStatsView, Sessions } from "../lib/api";
+import {
+  ApiError,
+  BankrollHistoryEntry,
+  SessionStatsView,
+  Sessions,
+} from "../lib/api";
 import { useApp } from "../lib/store";
 
 export default function Stats() {
@@ -144,6 +149,13 @@ export default function Stats() {
           </div>
         )}
 
+        {stats && stats.bankrolls && (
+          <BankrollComparison
+            bankrolls={stats.bankrolls}
+            history={stats.bankroll_history}
+          />
+        )}
+
         <div className="rounded-xl bg-felt p-3 text-xs space-y-1">
           <div className="flex justify-between">
             <span className="text-white/60">Template</span>
@@ -202,5 +214,149 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
       <div className="text-2xl font-mono">{value}</div>
       {sub && <div className="text-xs text-white/50">{sub}</div>}
     </div>
+  );
+}
+
+function BankrollComparison({
+  bankrolls,
+  history,
+}: {
+  bankrolls: SessionStatsView["bankrolls"];
+  history: BankrollHistoryEntry[];
+}) {
+  const actualDelta = bankrolls.actual - bankrolls.starting;
+  const bookDelta = bankrolls.book - bankrolls.starting;
+  const counterDelta = bankrolls.counter - bankrolls.starting;
+  return (
+    <div className="rounded-xl bg-felt p-3 space-y-3">
+      <div className="text-xs uppercase tracking-wide text-white/60">
+        How would I be doing if…
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <BankrollLine
+          label="You"
+          value={bankrolls.actual}
+          delta={actualDelta}
+          color="text-amber-300"
+        />
+        <BankrollLine
+          label="Book"
+          value={bankrolls.book}
+          delta={bookDelta}
+          color="text-emerald-300"
+        />
+        <BankrollLine
+          label="Counter"
+          value={bankrolls.counter}
+          delta={counterDelta}
+          color="text-sky-300"
+        />
+      </div>
+      <BankrollSparkline history={history} starting={bankrolls.starting} />
+      <div className="text-[11px] text-white/50 leading-relaxed">
+        Each line replays the same shoe state. <span className="text-emerald-300">Book</span> is
+        you playing perfect basic strategy. <span className="text-sky-300">Counter</span> adds
+        Hi-Lo / Illustrious 18 deviations and a count-spread bet sizing on top.
+      </div>
+    </div>
+  );
+}
+
+function BankrollLine({
+  label,
+  value,
+  delta,
+  color,
+}: {
+  label: string;
+  value: number;
+  delta: number;
+  color: string;
+}) {
+  const sign = delta > 0 ? "+" : delta < 0 ? "" : "";
+  return (
+    <div>
+      <div className={`text-xs ${color}`}>{label}</div>
+      <div className="font-mono text-lg">${value}</div>
+      <div className="text-[11px] text-white/50">
+        {sign}
+        {delta}
+      </div>
+    </div>
+  );
+}
+
+function BankrollSparkline({
+  history,
+  starting,
+}: {
+  history: BankrollHistoryEntry[];
+  starting: number;
+}) {
+  if (history.length < 2) {
+    return (
+      <div className="h-24 flex items-center justify-center text-xs text-white/40">
+        Play a few hands to see the comparison line.
+      </div>
+    );
+  }
+  const w = 320;
+  const h = 96;
+  const pad = 6;
+  const xs = history.map((_, i) => i);
+  const ys = history.flatMap((p) => [p.actual, p.book, p.counter]);
+  ys.push(starting); // anchor the y-axis around the buy-in
+  const yMin = Math.min(...ys);
+  const yMax = Math.max(...ys);
+  const yRange = Math.max(1, yMax - yMin);
+
+  const xStep = (w - pad * 2) / Math.max(1, xs.length - 1);
+  const yScale = (v: number) =>
+    h - pad - ((v - yMin) / yRange) * (h - pad * 2);
+  const xScale = (i: number) => pad + i * xStep;
+
+  function path(values: number[]): string {
+    return values
+      .map((v, i) => `${i === 0 ? "M" : "L"} ${xScale(i)} ${yScale(v)}`)
+      .join(" ");
+  }
+
+  const startingY = yScale(starting);
+
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className="w-full h-24"
+      role="img"
+      aria-label="bankroll comparison over hands played"
+    >
+      <line
+        x1={pad}
+        x2={w - pad}
+        y1={startingY}
+        y2={startingY}
+        stroke="rgba(255,255,255,0.18)"
+        strokeDasharray="2 3"
+      />
+      <path
+        d={path(history.map((p) => p.actual))}
+        fill="none"
+        stroke="#fcd34d"
+        strokeWidth={1.6}
+      />
+      <path
+        d={path(history.map((p) => p.book))}
+        fill="none"
+        stroke="#6ee7b7"
+        strokeWidth={1.6}
+      />
+      <path
+        d={path(history.map((p) => p.counter))}
+        fill="none"
+        stroke="#7dd3fc"
+        strokeWidth={1.6}
+      />
+    </svg>
   );
 }
