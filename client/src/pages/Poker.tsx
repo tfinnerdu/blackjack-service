@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { CardChips, CardPicker } from "../components/poker/CardPicker";
+import { VariantBuilder } from "../components/poker/VariantBuilder";
 import { ApiError } from "../lib/api";
 import {
   CompanionAnalysisView,
@@ -25,7 +26,7 @@ export default function PokerPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editorJson, setEditorJson] = useState("");
+  const [editorDraft, setEditorDraft] = useState<VariantSpec | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [wildMode, setWildMode] = useState(false);
   const [wildIndices, setWildIndices] = useState<number[]>([]);
@@ -64,13 +65,13 @@ export default function PokerPage() {
     if (!variant) return;
     const clone = { ...variant, name: `${variant.name} (copy)` };
     delete (clone as VariantWithMeta)._saved_template_id;
-    setEditorJson(JSON.stringify(clone, null, 2));
+    setEditorDraft(clone);
     setEditorError(null);
     setEditorOpen(true);
   }
 
   function openEditorBlank() {
-    setEditorJson(JSON.stringify({
+    setEditorDraft({
       name: "My Custom Variant",
       description: "",
       family: "home",
@@ -86,19 +87,12 @@ export default function PokerPage() {
       lo_rule: null,
       lo_eight_or_better: false,
       notes: "",
-    }, null, 2));
+    });
     setEditorError(null);
     setEditorOpen(true);
   }
 
-  async function saveEditor() {
-    let parsed: VariantSpec;
-    try {
-      parsed = JSON.parse(editorJson);
-    } catch {
-      setEditorError("invalid JSON");
-      return;
-    }
+  async function saveEditor(parsed: VariantSpec) {
     try {
       const saved = await Poker.saveVariant(parsed);
       await refreshVariants();
@@ -383,74 +377,14 @@ export default function PokerPage() {
         />
       </div>
 
-      {editorOpen && (
-        <VariantEditorSheet
-          json={editorJson}
-          onJsonChange={setEditorJson}
+      {editorOpen && editorDraft && (
+        <VariantBuilder
+          initial={editorDraft}
           onSave={saveEditor}
-          onClose={() => setEditorOpen(false)}
+          onCancel={() => setEditorOpen(false)}
           error={editorError}
         />
       )}
-    </div>
-  );
-}
-
-function VariantEditorSheet({
-  json,
-  onJsonChange,
-  onSave,
-  onClose,
-  error,
-}: {
-  json: string;
-  onJsonChange: (s: string) => void;
-  onSave: () => void;
-  onClose: () => void;
-  error: string | null;
-}) {
-  return (
-    <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col"
-      style={{
-        paddingTop: "env(safe-area-inset-top)",
-        paddingBottom: "env(safe-area-inset-bottom)",
-      }}
-    >
-      <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
-        <div className="flex items-center justify-between">
-          <div className="text-lg font-semibold">Edit variant</div>
-          <button onClick={onClose} className="text-white/60 text-lg">
-            ✕
-          </button>
-        </div>
-        <p className="text-xs text-white/60">
-          Edit the JSON below. Required fields: name, family, deck, deal,
-          wilds, hand, hi_lo. The companion treats the variant as a custom
-          one — pre-flop / draw / community streets all honored.
-        </p>
-        <textarea
-          value={json}
-          onChange={(e) => onJsonChange(e.target.value)}
-          spellCheck={false}
-          className="flex-1 rounded-lg bg-felt-dark text-white p-2 font-mono text-xs"
-        />
-        {error && <div className="text-red-300 text-sm">{error}</div>}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={onClose}
-            className="min-h-touch rounded-xl border border-white/20"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onSave}
-            className="min-h-touch rounded-xl bg-white text-felt-dark font-semibold"
-          >
-            Save
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
