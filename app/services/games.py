@@ -41,6 +41,7 @@ from ..strategy.book import book
 from . import shoe_trace
 from .round_state import round_from_json, round_to_json
 from .sessions import (
+    _claim_token,
     rules_from_dict,
     shoe_from_session,
     side_bets_from_dict,
@@ -161,21 +162,59 @@ def _all_cards_in_round(rnd: Round) -> list[Card]:
 
 # ---- AI auto-play ------------------------------------------------------
 
+def _present_human_seats(sess: GameSession) -> set[int]:
+    """Seat numbers that currently have a live human at them: the host's
+    own seat plus every guest with a valid claim token. A claim that's
+    been released (guest navigated away or hit "leave seat") drops out
+    of this set, so the round can route around them rather than hanging
+    waiting for someone who won't be back."""
+    claimed = json.loads(sess.seat_tokens_json or "{}")
+    present: set[int] = {sess.player_seat}
+    for seat_num_str, value in claimed.items():
+        if _claim_token(value):
+            try:
+                present.add(int(seat_num_str))
+            except (TypeError, ValueError):
+                continue
+    return present
+
+
+def _auto_resolve_absent_seats(rnd: Round, sess: GameSession) -> None:
+    """If a guest left the table mid-round, their seat is still flagged
+    is_human in the engine but no token can drive it. Auto-decline any
+    pending insurance for them, and treat them as standing once they
+    become the active seat — otherwise the round deadlocks waiting for
+    a player who isn't coming back."""
+    present = _present_human_seats(sess)
+    if rnd.state == RoundState.INSURANCE:
+        for seat in rnd.seats:
+            if seat.is_human and not seat.insurance_decided and seat.seat_num not in present:
+                rnd.offer_insurance(seat.seat_num, accept=False)
+
+
 def _auto_play_until_human_or_done(
     rnd: Round,
     rules: Rules,
     ai_seats: dict[int, AISeat],
     true_count: Optional[float],
+    present_human_seats: Optional[set[int]] = None,
 ) -> None:
     """Walk forward through the round, letting AI seats play their hands.
-    Stops when a human seat is up to act, when insurance is owed, or when
-    the round is complete."""
+    Stops when a present human seat is up to act, when insurance is owed,
+    or when the round is complete. Seats whose human walked away are
+    auto-stood so the table doesn't deadlock."""
     while rnd.state == RoundState.PLAYING:
         seat = rnd.active_seat
         if seat is None:
             return
         if seat.is_human:
-            return
+            if present_human_seats is None or seat.seat_num in present_human_seats:
+                return
+            # Guest abandoned the seat — stand the rest of their hands so
+            # the round can finish settling for everyone else still here.
+            legal = rnd.legal_actions()
+            rnd.act("stand" if "stand" in legal else legal[0])
+            continue
         ai = ai_seats.get(seat.seat_num)
         if ai is None:
             # Should not happen in a well-formed session, but bail safely
@@ -260,6 +299,7 @@ def _build_view(rnd: Round, rules: Rules, true_count: Optional[float]) -> RoundV
             "bankroll_before": seat.bankroll_before,
             "side_bet_results": dict(seat.side_bet_results),
             "finished": seat.finished,
+            "insurance_decided": seat.insurance_decided,
             "hands": [h.to_dict() for h in seat.hands],
         })
     dealer = {
@@ -699,11 +739,14 @@ def start_round(sess: GameSession, req: StartRoundRequest) -> RoundView:
     # Round may already be complete (everyone got a natural and dealer pushed,
     # or dealer peeked into BJ). If insurance is owed, AI seats decide first
     # and we return the human's prompt.
+    present = _present_human_seats(sess)
     if rnd.state == RoundState.INSURANCE:
         _auto_decide_ai_insurance(rnd, ai_seats, true_count_now)
         # Don't close insurance yet — the human still has to choose.
     else:
-        _auto_play_until_human_or_done(rnd, rules, ai_seats, true_count_now)
+        _auto_play_until_human_or_done(
+            rnd, rules, ai_seats, true_count_now, present_human_seats=present
+        )
 
     if rnd.state == RoundState.COMPLETE:
         _settle_into_session(sess, rnd)
@@ -793,17 +836,21 @@ def take_insurance(
 
     target_seat = seat_num if seat_num is not None else sess.player_seat
     rnd.offer_insurance(seat_num=target_seat, accept=accept, amount=amount)
-    # Only close insurance once every human seat has decided. AI seats
-    # decide via _auto_decide_ai_insurance up-front; if more humans
-    # remain, leave the round in INSURANCE state.
+    # Auto-decline for any guest who walked away while insurance was
+    # being offered, then gate "is everyone in?" against only the seats
+    # that are still here.
+    _auto_resolve_absent_seats(rnd, sess)
+    present = _present_human_seats(sess)
     pending = [
         s for s in rnd.seats
-        if s.is_human and not s.insurance_decided
+        if s.is_human and not s.insurance_decided and s.seat_num in present
     ]
     if not pending:
         rnd.close_insurance()
         if rnd.state == RoundState.PLAYING:
-            _auto_play_until_human_or_done(rnd, rules, ai, true_count_now)
+            _auto_play_until_human_or_done(
+                rnd, rules, ai, true_count_now, present_human_seats=present
+            )
 
     if rnd.state == RoundState.COMPLETE:
         _settle_into_session(sess, rnd)
@@ -868,7 +915,9 @@ def take_action(
             raise GameError("insufficient bankroll to split")
 
     rnd.act(action)
-    _auto_play_until_human_or_done(rnd, rules, ai, true_count_now)
+    _auto_play_until_human_or_done(
+        rnd, rules, ai, true_count_now, present_human_seats=_present_human_seats(sess)
+    )
 
     if rnd.state == RoundState.COMPLETE:
         _settle_into_session(sess, rnd)
@@ -880,10 +929,52 @@ def take_action(
 # ---- view-only fetch (page reload) ------------------------------------
 
 def get_active_round_view(sess: GameSession) -> Optional[RoundView]:
-    """Return the current in-flight round view, or None if no round."""
+    """Return the current in-flight round view, or None if no round.
+
+    Polled both by the host and by every guest, so we use this entry point
+    to nudge the round forward when a player has left the table: their
+    insurance decision is auto-declined, and any play-state turn that
+    lands on their seat is auto-stood. Without this, a guest who
+    disconnects between dealing and acting would freeze the round for
+    everyone else."""
     if not sess.active_round_json:
         return None
-    rnd, _, _, true_count_now = _load_active_round(sess)
+    rnd, started_at_dealt, ai, true_count_now = _load_active_round(sess)
     rules = _rules(sess)
+    present = _present_human_seats(sess)
+    mutated = False
+
+    if rnd.state == RoundState.INSURANCE:
+        before = sum(1 for s in rnd.seats if s.insurance_decided)
+        _auto_resolve_absent_seats(rnd, sess)
+        after = sum(1 for s in rnd.seats if s.insurance_decided)
+        if after != before:
+            mutated = True
+        pending = [
+            s for s in rnd.seats
+            if s.is_human and not s.insurance_decided and s.seat_num in present
+        ]
+        if not pending:
+            rnd.close_insurance()
+            mutated = True
+            if rnd.state == RoundState.PLAYING:
+                _auto_play_until_human_or_done(
+                    rnd, rules, ai, true_count_now, present_human_seats=present
+                )
+
+    if rnd.state == RoundState.PLAYING:
+        seat = rnd.active_seat
+        if seat is not None and seat.is_human and seat.seat_num not in present:
+            _auto_play_until_human_or_done(
+                rnd, rules, ai, true_count_now, present_human_seats=present
+            )
+            mutated = True
+
+    if mutated:
+        if rnd.state == RoundState.COMPLETE:
+            _settle_into_session(sess, rnd)
+        _persist_round(sess, rnd, started_at_dealt=started_at_dealt)
+        db.session.commit()
+
     return _build_view(rnd, rules, true_count_now)
 

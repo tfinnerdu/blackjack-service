@@ -9,12 +9,14 @@ export function SeatBlock({
   activeHandIndex,
   kind,
   isYou,
+  hideBlackjackStatus,
 }: {
   seat: SeatView;
   isActive: boolean;
   activeHandIndex: number | null;
   kind?: SeatKind;
   isYou?: boolean;
+  hideBlackjackStatus?: boolean;
 }) {
   // Fallback: derive a kind from is_human alone (legacy single-player path).
   const resolvedKind: SeatKind =
@@ -43,6 +45,7 @@ export function SeatBlock({
             hand={h}
             active={isActive && activeHandIndex === i && !h.finished}
             label={seat.hands.length > 1 ? `Hand ${i + 1}` : undefined}
+            hideBlackjackStatus={hideBlackjackStatus}
           />
         ))}
       </div>

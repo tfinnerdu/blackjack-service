@@ -5,15 +5,21 @@ export function HandRow({
   hand,
   active,
   label,
+  hideBlackjackStatus,
 }: {
   hand: HandView;
   active?: boolean;
   label?: string;
+  // Suppress the "Blackjack!" label until the insurance decision is in.
+  // Calling it out before the player decides leaks information they're
+  // supposed to weigh themselves (even-money / take-insurance is the
+  // canonical decision when you have a natural).
+  hideBlackjackStatus?: boolean;
 }) {
   const totalLabel = hand.soft && hand.total <= 21 ? `Soft ${hand.total}` : String(hand.total);
   const status = hand.bust
     ? "Bust"
-    : hand.blackjack
+    : hand.blackjack && !hideBlackjackStatus
     ? "Blackjack!"
     : hand.surrendered
     ? "Surrendered"

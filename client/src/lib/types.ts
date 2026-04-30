@@ -34,6 +34,7 @@ export interface SeatView {
   bankroll_before: number;
   finished: boolean;
   side_bet_results: Record<string, number>;
+  insurance_decided: boolean;
   hands: HandView[];
 }
 

@@ -179,6 +179,7 @@ export default function Play() {
                 activeHandIndex={round.active_hand_index}
                 kind={seatKindByNum[s.seat_num] ?? "ai"}
                 isYou={s.seat_num === callerSeat}
+                hideBlackjackStatus={round.state === "insurance"}
               />
             ))}
           </div>
@@ -216,7 +217,7 @@ export default function Play() {
 
       {/* Action bar (playing or insurance) */}
       {round && (round.state === "playing" || round.state === "insurance") && (
-        <ActionBar round={round} />
+        <ActionBar round={round} callerSeat={callerSeat ?? null} />
       )}
 
       {/* Completion summary */}
